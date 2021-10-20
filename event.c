@@ -42,7 +42,34 @@ void event_dispatch(struct event *ev){
     struct timespec ts;
     ensure_events_capacity(ev);
 
-    int n = kevent(ev->kqfd, NULL, 0, ev->events, ev->event_size, &ts);
+    ts.tv_sec = 0;
+    ts.tv_nsec = 100 * MICRO_SECOND;
+    int n = kevent(ev->kqfd, NULL, 0,
+                   ev->events, ev->event_size, &ts);
+    if (n == -1){
+        if (errno != EINTR)
+            log_error(strerror(errno));
+        //else system call interrupted by signal, ignore
+        return;
+    }
+    if (n == 0) // timeout
+        return;
+    for (int i = 0; i < n; ++i) {
+        int events = 0;
+        struct kevent kev = ev->events[i];
+        if (kev.flags & EV_ERROR){
+            log_warn(strerror(kev.data));
+            continue;
+        }
+        if (kev.filter == EVFILT_READ)
+            events |= EVENT_READ;
+        else if (kev.filter == EVFILT_WRITE)
+            events |= EVENT_WRITE;
+        if (!events)
+            continue;
+        struct event_wrap *wrap = (struct event_wrap*)kev.udata;
+        wrap->cb(kev.ident, events);
+    }
 }
 
 void event_dealloc(struct event *ev){
@@ -86,13 +113,13 @@ void event_add(struct event *ev, int fd, int events){
     if (events & EVENT_READ) {
         pos = get_or_construct_event(ev, fd, EVFILT_READ);
         kev = ev->changes[pos].kev;
-        EV_SET(kev, fd, EVFILT_READ, op, 0, 0, NULL);
+        EV_SET(kev, fd, EVFILT_READ, op, 0, 0, &ev->changes[pos]);
         chev[n++] = *kev;
     }
     if (events & EVENT_WRITE) {
         pos = get_or_construct_event(ev, fd, EVFILT_WRITE);
         kev = ev->changes[pos].kev;
-        EV_SET(kev, fd, EVFILT_WRITE, op, 0, 0, NULL);
+        EV_SET(kev, fd, EVFILT_WRITE, op, 0, 0, &ev->changes[pos]);
         chev[n++] = *kev;
     }
     kevent(ev->kqfd, chev, n, NULL, 0, NULL);

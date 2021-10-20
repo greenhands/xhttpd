@@ -15,6 +15,8 @@
 
 #define NEVENT 64
 
+#define MICRO_SECOND 1000000
+
 struct event {
     struct xhttp *http;
 
@@ -31,6 +33,7 @@ struct event {
 struct event_wrap {
     struct kevent *kev;
     int used;
+    void (*cb) (int fd, int events);
 };
 
 void event_init(struct xhttp *http);
