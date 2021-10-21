@@ -26,16 +26,18 @@ void log_m_(int level, const char *msg){
 void log_v_(int level, const char *msg, const char *fmt, va_list ap){
     char buf[LOG_BUF_LEN];
     int len;
+    char *msgfmt = "%s";
 
-    if (fmt)
+    if (fmt){
         vsnprintf(buf, sizeof(buf), fmt, ap);
-    else
+        msgfmt = " (%s)";
+    }else
         buf[0] = '\0';
 
     if(msg){
         len = strlen(buf);
         if (len < sizeof(buf) - 3){
-            snprintf(buf + len, sizeof(buf) - len, ": %s", msg);
+            snprintf(buf + len, sizeof(buf) - len, msgfmt, msg);
         }
     }
     log_m_(level, buf);

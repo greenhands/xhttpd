@@ -10,7 +10,7 @@ void ensure_changes_capacity(struct event *ev, int n_need) {
     if (ev->n_changes + n_need > ev->change_size) {
         while (ev->n_changes + n_need > ev->change_size)
             ev->change_size *= 2;
-        ev->changes = mem_realloc(ev->changes, sizeof(struct event_wrap) * ev->change_size);
+        ev->changes = mem_realloc(ev->changes, sizeof(struct event_change) * ev->change_size);
     }
 }
 
@@ -19,10 +19,12 @@ void ensure_events_capacity(struct event *ev) {
         while (ev->event_size < ev->n_changes)
             ev->event_size *= 2;
         ev->events = mem_realloc(ev->events, sizeof(struct kevent) * ev->event_size);
+
+        log_debugf(NULL, "enlarge event size to %d", ev->event_size);
     }
 }
 
-void event_init(struct xhttp *http){
+struct event* event_init(){
     int kq;
     struct event *ev = NULL;
 
@@ -32,10 +34,18 @@ void event_init(struct xhttp *http){
     ev = (struct event*)mem_calloc(1, sizeof(struct event));
     ev->kqfd = kq;
 
-    ev->change_size = ev->event_size = NEVENT;
+    ev->address_len = sizeof(struct sockaddr_in);
+    ev->address = mem_calloc(1, ev->address_len);
+
+    ev->change_size = ev->event_size = N_EVENT;
     ev->n_changes = 0;
-    ev->changes = mem_calloc(ev->change_size, sizeof(struct kevent));
-    ev->events = mem_calloc(ev->change_size, sizeof(struct kevent));
+    ev->changes = mem_calloc(ev->change_size, sizeof(struct event_change));
+    ev->events = mem_calloc(ev->event_size, sizeof(struct kevent));
+
+    ev->conn_size = N_CONN;
+    ev->connections = mem_calloc(ev->conn_size, sizeof(struct conn));
+
+    return ev;
 }
 
 void event_dispatch(struct event *ev){
@@ -43,7 +53,7 @@ void event_dispatch(struct event *ev){
     ensure_events_capacity(ev);
 
     ts.tv_sec = 0;
-    ts.tv_nsec = 100 * MICRO_SECOND;
+    ts.tv_nsec = 100 * MILLISECOND;
     int n = kevent(ev->kqfd, NULL, 0,
                    ev->events, ev->event_size, &ts);
     if (n == -1){
@@ -67,8 +77,8 @@ void event_dispatch(struct event *ev){
             events |= EVENT_WRITE;
         if (!events)
             continue;
-        struct event_wrap *wrap = (struct event_wrap*)kev.udata;
-        wrap->cb(kev.ident, events);
+        struct event_change *change = (struct event_change*)kev.udata;
+        change->cb(ev, &kev, events);
     }
 }
 
@@ -76,51 +86,54 @@ void event_dealloc(struct event *ev){
     mem_free(ev);
 }
 
-int get_or_construct_event(struct event *ev, int fd, int filter){
-    struct event_wrap wrap;
-    struct kevent *kev;
+static int get_or_create_event_change(struct event *ev, int fd, int filter){
+    struct event_change change;
     int first_empty = -1;
     for (int i = 0; i < ev->change_size; ++i) {
-        wrap = ev->changes[i];
-        if (!wrap.used) {
+        change = ev->changes[i];
+        if (change.fd < 0) {
             if (first_empty < 0) first_empty = i;
             continue;
         }
-        kev = wrap.kev;
-        if (kev->ident == fd && kev->filter == filter)
+        if (change.fd == fd && change.filter == filter)
             return i;
     }
     // not found, construct a new struct
-    kev = mem_calloc(1, sizeof(struct kevent));
-    kev->ident = fd;
-    kev->filter = filter;
-
     if (first_empty < 0) {
         ensure_changes_capacity(ev, 1);
         first_empty = ev->n_changes;
     }
     ev->n_changes++;
-    ev->changes[first_empty].kev = kev;
-    ev->changes[first_empty].used = 1;
+    ev->changes[first_empty].fd = fd;
+    ev->changes[first_empty].filter = filter;
     return first_empty;
 }
 
-void event_add(struct event *ev, int fd, int events){
+static int find_event_change(struct event *ev, int fd, int filter) {
+    for (int i = 0; i < ev->change_size; ++i) {
+        if (ev->changes[i].fd < 0) {
+            continue;
+        }
+        if (ev->changes[i].fd == fd && ev->changes[i].filter == filter)
+            return i;
+    }
+    return -1;
+}
+
+void event_add(struct event *ev, int fd, int events, event_cb cb){
     struct kevent chev[2];
     struct kevent *kev;
     int pos, n = 0;
     int op = EV_ADD|EV_ENABLE;
     if (events & EVENT_READ) {
-        pos = get_or_construct_event(ev, fd, EVFILT_READ);
-        kev = ev->changes[pos].kev;
-        EV_SET(kev, fd, EVFILT_READ, op, 0, 0, &ev->changes[pos]);
-        chev[n++] = *kev;
+        pos = get_or_create_event_change(ev, fd, EVFILT_READ);
+        ev->changes[pos].cb = cb;
+        EV_SET(&chev[n++], fd, EVFILT_READ, op, 0, 0, &ev->changes[pos]);
     }
     if (events & EVENT_WRITE) {
-        pos = get_or_construct_event(ev, fd, EVFILT_WRITE);
-        kev = ev->changes[pos].kev;
-        EV_SET(kev, fd, EVFILT_WRITE, op, 0, 0, &ev->changes[pos]);
-        chev[n++] = *kev;
+        pos = get_or_create_event_change(ev, fd, EVFILT_WRITE);
+        ev->changes[pos].cb = cb;
+        EV_SET(&chev[n++], fd, EVFILT_WRITE, op, 0, 0, &ev->changes[pos]);
     }
     kevent(ev->kqfd, chev, n, NULL, 0, NULL);
 }
@@ -131,18 +144,51 @@ void event_del(struct event *ev, int fd, int events){
     int pos, n = 0;
     int op = EV_DELETE;
     if (events & EVENT_READ) {
-        pos = get_or_construct_event(ev, fd, EVFILT_READ);
-        ev->changes[pos].used = 0;
-        mem_free(ev->changes[pos].kev);
-        ev->n_changes -= 1;
-        EV_SET(&chev[n++], fd, EVFILT_READ, op, 0, 0, NULL);
+        pos = find_event_change(ev, fd, EVFILT_READ);
+        if (pos >= 0) {
+            ev->changes[pos].fd = -1;
+            ev->n_changes -= 1;
+            EV_SET(&chev[n++], fd, EVFILT_READ, op, 0, 0, NULL);
+        }
     }
     if (events & EVENT_WRITE) {
-        pos = get_or_construct_event(ev, fd, EVFILT_WRITE);
-        ev->changes[pos].used = 0;
-        mem_free(ev->changes[pos].kev);
-        ev->n_changes -= 1;
-        EV_SET(&chev[n++], fd, EVFILT_WRITE, op, 0, 0, NULL);
+        pos = find_event_change(ev, fd, EVFILT_WRITE);
+        if (pos > 0) {
+            ev->changes[pos].fd = -1;
+            ev->n_changes -= 1;
+            EV_SET(&chev[n++], fd, EVFILT_WRITE, op, 0, 0, NULL);
+        }
     }
     kevent(ev->kqfd, chev, n, NULL, 0, NULL);
+}
+
+void set_connect_cb(struct event *ev, void (*cb) (struct conn *c)) {
+    ev->on_connection = cb;
+}
+
+struct conn* event_get_free_connection(struct event *ev){
+    int pos = -1;
+    for (int i = 0; i < ev->conn_size; ++i) {
+        if (ev->connections[i].pos != i)
+            pos = i;
+    }
+    if (pos < 0) {
+        pos = ev->conn_size;
+        ev->conn_size *= 2;
+        ev->connections = mem_realloc(ev->connections, ev->conn_size * sizeof(struct conn));
+    }
+    ev->connections[pos].ev = ev;
+    ev->connections[pos].pos = pos;
+
+    return &ev->connections[pos];
+}
+
+struct conn* event_find_connection(struct event *ev, int fd){
+    for (int i = 0; i < ev->conn_size; ++i) {
+        if (ev->connections[i].pos != i)
+            continue;
+        if (ev->connections[i].fd == fd)
+            return &ev->connections[i];
+    }
+    return NULL;
 }
