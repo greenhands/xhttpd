@@ -21,6 +21,7 @@ static int request_read_line(struct request *r, struct conn *c) {
             conn_empty_buff(c);
         }
         if (ch == '\n') {
+            buf[n] = '\0';
             if (DEBUG)
                 log_debugf(NULL, "%d characters read, vp: %d, rp: %d", n, c->valid_p, c->read_p);
             return 0;
@@ -38,13 +39,17 @@ static void get_request_headers(struct conn *c) {
     struct request *r = c->data;
 }
 
+static int parse_request_line(struct request *r) {
+    char *p = r->line_buf;
+    // TODO
+}
+
 static void get_request_line(struct conn *c) {
     struct request *r = c->data;
     if (request_read_line(r, c) != 0) {
         return;
     }
     if (DEBUG) {
-        r->line_buf[r->line_end] = '\0';
         log_debugf(r->line_buf, "length %d", r->line_end);
     }
 
