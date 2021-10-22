@@ -30,6 +30,10 @@ struct conn {
     char r_buf[BUFF_SIZE];
     int valid_p;
     int read_p;
+
+    char w_buf[BUFF_SIZE];
+    int w_len;
+    int w_write;
 };
 
 void handle_connection(struct event *ev, struct kevent *kev, int events);

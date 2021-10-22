@@ -37,12 +37,14 @@ static void conn_read(struct conn *c){
         if (n == 0) {
             log_info("connection close by remote");
             conn_close(c);
+            return;
         }
         if (n == -1) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) break;
             else {
                 log_warnf(strerror(errno), "error occurs when read from socket");
                 conn_close(c);
+                return;
             }
         }
         c->valid_p += n;
@@ -99,6 +101,8 @@ void conn_free(struct conn *c) {
     c->pos = -1;
     c->valid_p = 0;
     c->read_p = 0;
+    c->w_len = 0;
+    c->w_write = 0;
 }
 
 void conn_empty_buff(struct conn *c) {

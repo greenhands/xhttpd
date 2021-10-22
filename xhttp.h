@@ -17,6 +17,7 @@
 
 struct xhttp {
     struct event *ev;
+    int allowed_methods;
 
     struct request *reqs;
     int req_size;

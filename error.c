@@ -13,6 +13,9 @@ void log_m_(int level, const char *msg){
         case LOG_INFO:
             level_str = "INFO";
             break;
+        case LOG_WARN:
+            level_str = "WARN";
+            break;
         case LOG_ERROR:
             level_str = "ERROR";
             break;

@@ -21,4 +21,6 @@
 
 #define DEBUG 1
 
+#define EMPTY_CHAR      " \t"
+
 #endif //XHTTPD_COMMON_H

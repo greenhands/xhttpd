@@ -33,6 +33,7 @@ void xhttp_init(struct xhttp *http) {
 
     http->ev = ev;
     ev->http = http;
+    http->allowed_methods = HTTP_GET|HTTP_POST;
 
     http->req_size = N_REQUEST;
     http->reqs = mem_calloc(http->req_size, sizeof(struct request));
