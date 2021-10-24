@@ -40,6 +40,8 @@ void xhttp_init(struct xhttp *http) {
 
     int httpd = xhttp_create_bind_socket("127.0.0.1", XHTTP_LISTEN_PORT);
     event_add(http->ev, httpd, EVENT_READ, handle_connection);
+
+    // TODO: set http handler
 }
 
 void xhttp_start(struct xhttp *http) {

@@ -50,11 +50,6 @@ static void conn_read(struct conn *c){
         c->valid_p += n;
     }
 
-    if (DEBUG) {
-        c->r_buf[c->valid_p] = '\0';
-        log_debugf(c->r_buf, "length %d", c->valid_p);
-    }
-
     // buff is full, remove fd from kqueue
     // TODO: add it back later
     if (c->valid_p >= sizeof(c->r_buf)) {
@@ -84,7 +79,7 @@ struct conn* conn_new(struct event *ev, int fd){
     return c;
 }
 
-// TODO: import, waiting to complete
+// TODO: important, waiting to complete
 void conn_close(struct conn *c) {
     log_info("close connection by server");
 
@@ -106,8 +101,8 @@ void conn_free(struct conn *c) {
 }
 
 void conn_empty_buff(struct conn *c) {
-    // empty the buff, if buff is full put fd back to kqueue
-    c->read_p = c->valid_p = 0;
+    // if buff is full put fd back to kqueue, then empty the buff
     if (c->valid_p == sizeof(c->r_buf))
         event_add(c->ev, c->fd, EVENT_READ, handle_read_write);
+    c->read_p = c->valid_p = 0;
 }

@@ -21,6 +21,8 @@ struct xhttp {
 
     struct request *reqs;
     int req_size;
+
+    void (*http_handler) (struct request *r);
 };
 
 #endif //XHTTPD_XHTTP_H

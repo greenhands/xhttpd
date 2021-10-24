@@ -40,6 +40,7 @@ struct request {
     char *version;
     struct header headers[HEADER_SIZE];
     int header_len;
+    int content_len;
 
     // below is response contents
     int status_code;

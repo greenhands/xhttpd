@@ -5,32 +5,27 @@
 #include "request.h"
 
 // consume one line from connection buf
-// return 0 when got line, otherwise the caller need to try again
+// return: 0 when got line, otherwise the caller need to try again
 static int request_read_line(struct request *r, struct conn *c) {
-    int n = 0;
     char ch;
-    int buff_size = sizeof(r->line_buf) - 1 - r->line_end;
-    char *buf = r->line_buf + r->line_end;
+    int buff_size = sizeof(r->line_buf) - 1;
+    char *buf = r->line_buf;
 
-    while (n < buff_size && c->read_p < c->valid_p) {
+    while (r->line_end < buff_size && c->read_p < c->valid_p) {
         ch = c->r_buf[c->read_p++];
         if (ch != '\r') {
-            buf[n] = ch;
-            n++;r->line_end++;
+            buf[r->line_end++] = ch;
         }
 
         if (c->read_p == c->valid_p) {
             conn_empty_buff(c);
         }
         if (ch == '\n') {
-            buf[n] = '\0';
-            if (DEBUG) {
-                log_debugf("request_read_line", "read from buff: %s[%d] total: %d, curr: %d", buf, n, c->valid_p, c->read_p);
-            }
+            buf[r->line_end-1] = '\0';
             return 0;
         }
     }
-    if (n == buff_size) {
+    if (r->line_end == buff_size) {
         conn_close(c);
         log_warn("request line is too long");
         return -1;
@@ -38,16 +33,96 @@ static int request_read_line(struct request *r, struct conn *c) {
     return EAGAIN;
 }
 
-static void get_request_body(struct conn *c) {
-    // TODO: discard all empty lines
-    log_debug("get_request_body");
+static void report_request(struct request *r) {
+    if (r->http->http_handler)
+        r->http->http_handler(r);
 }
 
-static int parse_request_header(struct request *r) {
-    log_debugf("parse_request_header", "%s", r->line_buf);
+// discard empty line
+// return: 0 means empty lines end
+//         -1 means something wrong in request data
+//         EAGAIN means discard one empty line, and need to call this function again
+static int discard_empty_line(struct request *r, struct conn *c) {
+    if (r->content_len == 0) {
+        c->read_callback = NULL;
+        return 0;
+    }
+    int buf_len = c->valid_p - c->read_p;
+    if (buf_len == 0)
+        return EAGAIN;
+
+    if (c->r_buf[c->read_p] != '\r')
+        return 0;
+
+    if (buf_len == 1)
+        return EAGAIN;
+
+    if (c->r_buf[c->read_p+1] != '\n')
+        return -1;
+
+    c->read_p += 2;
+    return EAGAIN;
+}
+
+// read_callback
+static void before_read_request_body(struct conn *c) {
+    struct request *r = c->data;
+
+    // TODO: discard all empty lines
+
+    report_request(r);
+    log_debug("before_read_request_body");
+}
+
+static int check_request_header(struct request *r, struct header *h) {
+    if (strequal(h->key, "Content-Length")) {
+        int len = strtol(h->value, NULL, 10);
+        if (len == 0) {
+            log_warnf(strerror(errno), "request header Content-Length invalid");
+            return -1;
+        }
+        r->content_len = len;
+    }
     return 0;
 }
 
+static int parse_request_header(struct request *r) {
+    char *key, *value, *line;
+
+    if (r->header_len == HEADER_SIZE) {
+        log_warnf(NULL, "header discard: %s", r->line_buf);
+        return 0;
+    }
+    // key
+    key = line = r->line_buf;
+    char *d = strpbrk(line, ":");
+    if (!d || d == line || d[1] == '\0') {
+        r->status_code = HTTP_BAD_REQUEST;
+        return -1;
+    }
+    *d = '\0';
+
+    // value
+    line = d+1;
+    value = line + strspn(line, EMPTY_CHAR);
+    if (*value == '\0') {
+        r->status_code = HTTP_BAD_REQUEST;
+        return -1;
+    }
+
+    struct header *h = &r->headers[r->header_len++];
+    h->key = alloc_copy_string(key);
+    h->value = alloc_copy_string(value);
+    if (check_request_header(r, h) != 0) {
+        r->status_code = HTTP_BAD_REQUEST;
+        return -1;
+    }
+
+    log_debugf("parse_request_header", "header: key: [%s], value: [%s]", key, value);
+    return 0;
+}
+
+// read_callback
 static void get_request_headers(struct conn *c) {
     struct request *r = c->data;
 
@@ -56,12 +131,12 @@ static void get_request_headers(struct conn *c) {
             return;
 
         if (DEBUG)
-            log_debugf("get_request_headers", "request header: %s, buff_len: %d", r->line_buf, r->line_end);
+            log_debugf("get_request_headers", "request header: %s", r->line_buf);
 
-        if (r->line_buf[0] == '\n') {
+        if (r->line_buf[0] == '\0') {
             r->line_end = 0;
-            c->read_callback = get_request_body; // read header finish, next to read request body (if any)
-            get_request_body(c);
+            c->read_callback = before_read_request_body; // read header finish, next to read request body (if any)
+            before_read_request_body(c);
             return;
         }
 
@@ -113,11 +188,12 @@ static int parse_request_line(struct request *r) {
     }
     r->version = alloc_copy_string(token);
 
-    log_debugf(NULL, "request line parse finish, method: %d, uri: %s, version: %s", r->method, r->uri, r->version);
+    log_debugf(NULL, "method: [%d], uri: [%s], version: [%s]", r->method, r->uri, r->version);
 
     return 0;
 }
 
+// read_callback
 static void get_request_line(struct conn *c) {
     struct request *r = c->data;
     if (request_read_line(r, c) != 0)
@@ -167,6 +243,7 @@ void request_new(struct conn *c) {
     r->c = c;
     r->line_end = 0;
     r->header_len = 0;
+    r->content_len = 0;
 
     r->status_code = HTTP_OK;
 
@@ -198,7 +275,7 @@ void response(struct request *r) {
     // close read callback
     r->c->read_callback = NULL;
 
+    log_debugf(NULL, "status code: %d", r->status_code);
     // TODO: write http headers and body
-    // TODO: close connection when finish
     conn_close(r->c);
 }

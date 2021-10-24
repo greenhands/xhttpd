@@ -1,7 +1,7 @@
 # xhttpd
 一个简单的http服务器，用来练习网络编程和服务器编程
 
-###Todo
+### Todo
 - [ ] GET
 - [ ] POST
 - [ ] cgi
@@ -10,3 +10,6 @@
 - [ ] 定时器
 - [ ] 日志文件
 - [ ] 多线程、线程池
+
+### 支持的Content-Type
+- [ ] application/x-www-form-urlencoded
