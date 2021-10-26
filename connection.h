@@ -9,7 +9,7 @@
 #include "event.h"
 #include "util.h"
 
-#define BUFF_SIZE 32
+#define BUFF_SIZE 4096
 
 struct conn {
     int fd;
