@@ -62,6 +62,7 @@ static int copy_socket_buff(struct conn *c) {
 }
 
 static void conn_read(struct conn *c){
+    log_debug(__func__ );
     if (copy_socket_buff(c) == -1)
         return;
 
@@ -70,14 +71,17 @@ static void conn_read(struct conn *c){
 }
 
 static int conn_send_buff(struct conn *c, char *b, int buf_len) {
-    // TODO: do async send
+    // if connection is closed, send nothing
+    if (c->fd <= 0)
+        return -1;
+
     int n = write(c->fd, b, buf_len);
     if (n == -1) {
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             conn_listen(c, EVENT_WRITE);
             return 0;
         }else {
-//            log_debugf(strerror(errno), "send error");
+            log_debugf(__func__, "send error: %s", strerror(errno));
             conn_close(c);
             return -1;
         }
@@ -86,13 +90,7 @@ static int conn_send_buff(struct conn *c, char *b, int buf_len) {
 }
 
 static void conn_write(struct conn *c){
-    log_debug("write available");
-    while (1) {
-        int ret = conn_send_buff(c, "HTTP/1.0 200 OK\r\n", 17);
-        if (ret <= 0)
-            break;
-        log_debugf(NULL, "%d bytes sent", ret);
-    }
+    log_debug(__func__ );
 
     if (c->write_callback)
         c->write_callback(c);
@@ -112,6 +110,7 @@ struct conn* conn_new(struct event *ev, int fd){
 }
 
 void conn_listen(struct conn *c, int events) {
+    log_debugf(__func__ , "listen event: %d", events);
     event_add(c->ev, c->fd, events, handle_read_write);
 }
 
@@ -135,6 +134,10 @@ void conn_free(struct conn *c) {
     c->read_p = 0;
     c->w_len = 0;
     c->w_write = 0;
+
+    c->read_callback = NULL;
+    c->write_callback = NULL;
+    c->close_callback = NULL;
 }
 
 // empty buff and read from socket

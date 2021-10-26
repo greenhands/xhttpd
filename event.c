@@ -28,6 +28,9 @@ struct event* event_init(){
     int kq;
     struct event *ev = NULL;
 
+    // TODO: more signals support
+    signal(SIGPIPE, SIG_IGN); // ignore SIGPIPE to prevent from crash on send to a closed socket
+
     if ((kq=kqueue()) == -1)
         log_error(strerror(errno));
 

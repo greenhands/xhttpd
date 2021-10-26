@@ -36,6 +36,8 @@ struct request {
     struct header headers[HEADER_SIZE];
     int header_len;
     int content_len;
+    char *request_body;
+    int body_end;
 
     // below is response contents
     int status_code;
@@ -43,6 +45,5 @@ struct request {
 
 void request_new(struct conn *c);
 void request_free(struct request *r);
-void request_read_body(struct request *r);
 
 #endif //XHTTPD_REQUEST_H

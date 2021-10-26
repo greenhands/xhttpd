@@ -34,11 +34,6 @@ static int request_read_line(struct request *r, struct conn *c) {
 }
 
 static void report_request(struct request *r) {
-    // close read callback temporarily
-    r->c->read_callback = NULL;
-    // TODO: remove test code
-    conn_listen(r->c, EVENT_WRITE);
-
     handle_http_request(r);
 }
 
@@ -48,12 +43,7 @@ static void report_request(struct request *r) {
 //         EAGAIN means data not ready, need to call it later (by io event automatically)
 static int discard_empty_line(struct request *r, struct conn *c) {
     while (c->read_p < c->valid_p) {
-        char ch = c->r_buf[c->read_p++];
-
-        // ensure we have buff space on next read, or we are listening on read event
-        if (c->read_p == c->valid_p) {
-            if (conn_fulfill_buff(c) == -1) return -1;
-        }
+        char ch = c->r_buf[c->read_p];
 
         if (ch != r->expect) {
             if (r->expect == '\r') return 0;
@@ -63,20 +53,61 @@ static int discard_empty_line(struct request *r, struct conn *c) {
             }
         }
 
+        c->read_p++;
         if (r->expect == '\r')
             r->expect = '\n';
         else
             r->expect = '\r';
+
+        // ensure we have buff space on next read, or we are listening on read event
+        if (c->read_p == c->valid_p) {
+            if (conn_fulfill_buff(c) == -1) return -1;
+        }
     }
     return EAGAIN;
 }
 
-static void finish_request_and_detect_close(struct request *r) {
+static int read_body_from_buff(struct request *r, struct conn *c) {
+    while (c->read_p < c->valid_p) {
+        int body_len = r->content_len - r->body_end;
+        int buf_len = c->valid_p - c->read_p;
+        if (body_len < buf_len) {
+            memmove(r->request_body+r->body_end, c->r_buf+c->read_p, body_len);
+            r->body_end += body_len;
+            c->read_p += body_len;
+            return 0;
+        }else {
+            memmove(r->request_body+r->body_end, c->r_buf+c->read_p, buf_len);
+            r->body_end += buf_len;
+            if (conn_fulfill_buff(c) == -1)
+                return -1;
+            if (r->body_end == r->content_len)
+                return 0;
+        }
+    }
+    return EAGAIN;
+}
+
+static void after_read_request_body(struct request *r, struct conn *c) {
+    // close read callback, but listen for socket close event
+    c->read_callback = NULL;
+    r->expect = '\r';
+    if (discard_empty_line(r, c) != EAGAIN) {
+        conn_close(c);
+        return;
+    }
     report_request(r);
 }
 
+// read_callback
 static void read_request_body(struct conn *c) {
+    struct request *r = c->data;
 
+    if (read_body_from_buff(r, c) != 0)
+        return;
+
+    log_debugf(__func__ , "request body: %s", r->request_body);
+    after_read_request_body(r, c);
 }
 
 // read_callback
@@ -84,13 +115,15 @@ static void before_read_request_body(struct conn *c) {
     struct request *r = c->data;
 
     if (r->content_len == 0) {
-
+        after_read_request_body(r, c);
+        return;
     }
     // discard all empty lines
     if (discard_empty_line(r, c) != 0)
         return;
 
     c->read_callback = read_request_body;
+    r->request_body = mem_calloc(r->content_len, sizeof(char) + 1);
     read_request_body(c);
 }
 
@@ -266,6 +299,7 @@ void request_new(struct conn *c) {
     r->line_end = 0;
     r->header_len = 0;
     r->content_len = 0;
+    r->body_end = 0;
 
     r->status_code = HTTP_OK;
 
@@ -283,8 +317,5 @@ void request_free(struct request *r) {
         mem_free(r->headers[i].key);
         mem_free(r->headers[i].value);
     }
-}
-
-void request_read_body(struct request *r) {
-
+    mem_free(r->request_body);
 }

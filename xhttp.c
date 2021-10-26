@@ -51,7 +51,7 @@ static void xhttp_start(struct xhttp *http) {
 }
 
 void handle_http_request(struct request *r) {
-    log_debugf("handle_http_request", "method: %d url: %s", r->method, r->uri);
+    log_debugf(__func__ , "handle method: %d url: %s", r->method, r->uri);
 }
 
 int main() {
