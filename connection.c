@@ -24,44 +24,76 @@ void handle_connection(struct event *ev, struct kevent *kev, int events){
         log_error(strerror(errno));
     set_nonblocking(client);
 
+    // add listen fd back to kqueue
+    event_add(ev, listen_fd, EVENT_READ, handle_connection);
+
     struct conn *c = conn_new(ev, client);
     event_add(ev, client, EVENT_READ, handle_read_write);
     if (ev->on_connection)
         ev->on_connection(c);
 }
 
-static void conn_read(struct conn *c){
-    int n = 0;
+// copy data from socket buff until r_buf if full or data is empty
+// return:  0 ok, r_buf is full now
+//          -1 something wrong, need to close connection
+//          EAGAIN data empty, need to listen for io event
+static int copy_socket_buff(struct conn *c) {
     while(c->valid_p < sizeof(c->r_buf)) {
-        n = recv(c->fd, c->r_buf+c->valid_p, sizeof(c->r_buf) - c->valid_p, 0);
+        int n = recv(c->fd, c->r_buf+c->valid_p, sizeof(c->r_buf) - c->valid_p, 0);
         if (n == 0) {
             log_info("connection close by remote");
             conn_close(c);
-            return;
+            return -1;
         }
         if (n == -1) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+            if (errno == EAGAIN || errno == EWOULDBLOCK){
+                conn_listen(c, EVENT_READ);
+                return EAGAIN;
+            }
             else {
                 log_warnf(strerror(errno), "error occurs when read from socket");
                 conn_close(c);
-                return;
+                return -1;
             }
         }
         c->valid_p += n;
     }
+    return 0;
+}
 
-    // buff is full, remove fd from kqueue
-    // TODO: add it back later
-    if (c->valid_p >= sizeof(c->r_buf)) {
-        event_del(c->ev, c->fd, EVENT_READ);
-    }
+static void conn_read(struct conn *c){
+    if (copy_socket_buff(c) == -1)
+        return;
 
     if (c->read_callback)
         c->read_callback(c);
 }
 
+static int conn_send_buff(struct conn *c, char *b, int buf_len) {
+    // TODO: do async send
+    int n = write(c->fd, b, buf_len);
+    if (n == -1) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            conn_listen(c, EVENT_WRITE);
+            return 0;
+        }else {
+//            log_debugf(strerror(errno), "send error");
+            conn_close(c);
+            return -1;
+        }
+    }
+    return n;
+}
+
 static void conn_write(struct conn *c){
     log_debug("write available");
+    while (1) {
+        int ret = conn_send_buff(c, "HTTP/1.0 200 OK\r\n", 17);
+        if (ret <= 0)
+            break;
+        log_debugf(NULL, "%d bytes sent", ret);
+    }
+
     if (c->write_callback)
         c->write_callback(c);
 }
@@ -79,6 +111,10 @@ struct conn* conn_new(struct event *ev, int fd){
     return c;
 }
 
+void conn_listen(struct conn *c, int events) {
+    event_add(c->ev, c->fd, events, handle_read_write);
+}
+
 // TODO: important, waiting to complete
 void conn_close(struct conn *c) {
     log_info("close connection by server");
@@ -93,6 +129,7 @@ void conn_close(struct conn *c) {
 }
 
 void conn_free(struct conn *c) {
+    c->fd = -1;
     c->pos = -1;
     c->valid_p = 0;
     c->read_p = 0;
@@ -100,9 +137,11 @@ void conn_free(struct conn *c) {
     c->w_write = 0;
 }
 
-void conn_empty_buff(struct conn *c) {
-    // if buff is full put fd back to kqueue, then empty the buff
-    if (c->valid_p == sizeof(c->r_buf))
-        event_add(c->ev, c->fd, EVENT_READ, handle_read_write);
-    c->read_p = c->valid_p = 0;
+// empty buff and read from socket
+int conn_fulfill_buff(struct conn *c) {
+    c->valid_p = c->read_p = 0;
+    int ret = copy_socket_buff(c);
+    if (ret == -1)
+        return -1;
+    return 0;
 }

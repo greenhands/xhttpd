@@ -124,7 +124,7 @@ void event_add(struct event *ev, int fd, int events, event_cb cb){
     struct kevent chev[2];
     struct kevent *kev;
     int pos, n = 0;
-    int op = EV_ADD|EV_ENABLE;
+    int op = EV_ADD|EV_ENABLE|EV_ONESHOT;
     if (events & EVENT_READ) {
         pos = get_or_create_event_change(ev, fd, EVFILT_READ);
         ev->changes[pos].cb = cb;
@@ -142,7 +142,7 @@ void event_del(struct event *ev, int fd, int events){
     struct kevent chev[2];
     struct kevent *kev;
     int pos, n = 0;
-    int op = EV_DELETE;
+    int op = EV_DELETE|EV_ONESHOT;
     if (events & EVENT_READ) {
         pos = find_event_change(ev, fd, EVFILT_READ);
         if (pos >= 0) {

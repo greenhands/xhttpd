@@ -11,5 +11,8 @@
 - [ ] 日志文件
 - [ ] 多线程、线程池
 
+### 优化
+- [ ] buffer可以封装一下
+
 ### 支持的Content-Type
 - [ ] application/x-www-form-urlencoded

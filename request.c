@@ -18,7 +18,7 @@ static int request_read_line(struct request *r, struct conn *c) {
         }
 
         if (c->read_p == c->valid_p) {
-            conn_empty_buff(c);
+            if (conn_fulfill_buff(c) == -1) return -1;
         }
         if (ch == '\n') {
             buf[r->line_end-1] = '\0';
@@ -34,44 +34,64 @@ static int request_read_line(struct request *r, struct conn *c) {
 }
 
 static void report_request(struct request *r) {
-    if (r->http->http_handler)
-        r->http->http_handler(r);
+    // close read callback temporarily
+    r->c->read_callback = NULL;
+    // TODO: remove test code
+    conn_listen(r->c, EVENT_WRITE);
+
+    handle_http_request(r);
 }
 
 // discard empty line
-// return: 0 means empty lines end
+// return: 0 means empty lines end, and has more content
 //         -1 means something wrong in request data
-//         EAGAIN means discard one empty line, and need to call this function again
+//         EAGAIN means data not ready, need to call it later (by io event automatically)
 static int discard_empty_line(struct request *r, struct conn *c) {
-    if (r->content_len == 0) {
-        c->read_callback = NULL;
-        return 0;
+    while (c->read_p < c->valid_p) {
+        char ch = c->r_buf[c->read_p++];
+
+        // ensure we have buff space on next read, or we are listening on read event
+        if (c->read_p == c->valid_p) {
+            if (conn_fulfill_buff(c) == -1) return -1;
+        }
+
+        if (ch != r->expect) {
+            if (r->expect == '\r') return 0;
+            else {
+                conn_close(c);
+                return -1;
+            }
+        }
+
+        if (r->expect == '\r')
+            r->expect = '\n';
+        else
+            r->expect = '\r';
     }
-    int buf_len = c->valid_p - c->read_p;
-    if (buf_len == 0)
-        return EAGAIN;
-
-    if (c->r_buf[c->read_p] != '\r')
-        return 0;
-
-    if (buf_len == 1)
-        return EAGAIN;
-
-    if (c->r_buf[c->read_p+1] != '\n')
-        return -1;
-
-    c->read_p += 2;
     return EAGAIN;
+}
+
+static void finish_request_and_detect_close(struct request *r) {
+    report_request(r);
+}
+
+static void read_request_body(struct conn *c) {
+
 }
 
 // read_callback
 static void before_read_request_body(struct conn *c) {
     struct request *r = c->data;
 
-    // TODO: discard all empty lines
+    if (r->content_len == 0) {
 
-    report_request(r);
-    log_debug("before_read_request_body");
+    }
+    // discard all empty lines
+    if (discard_empty_line(r, c) != 0)
+        return;
+
+    c->read_callback = read_request_body;
+    read_request_body(c);
 }
 
 static int check_request_header(struct request *r, struct header *h) {
@@ -135,6 +155,7 @@ static void get_request_headers(struct conn *c) {
 
         if (r->line_buf[0] == '\0') {
             r->line_end = 0;
+            r->expect = '\r';
             c->read_callback = before_read_request_body; // read header finish, next to read request body (if any)
             before_read_request_body(c);
             return;
@@ -188,7 +209,7 @@ static int parse_request_line(struct request *r) {
     }
     r->version = alloc_copy_string(token);
 
-    log_debugf(NULL, "method: [%d], uri: [%s], version: [%s]", r->method, r->uri, r->version);
+    log_debugf("parse_request_line", "method: [%d], uri: [%s], version: [%s]", r->method, r->uri, r->version);
 
     return 0;
 }
@@ -219,6 +240,7 @@ static void get_request_line(struct conn *c) {
     get_request_headers(c);
 }
 
+// do the clean work
 static void on_connection_close(struct conn *c) {
     struct request *r = c->data;
     request_free(r);
@@ -263,19 +285,6 @@ void request_free(struct request *r) {
     }
 }
 
-static void write_response_line(struct request *r) {
+void request_read_body(struct request *r) {
 
-}
-
-static void write_response_headers(struct request *r) {
-
-}
-
-void response(struct request *r) {
-    // close read callback
-    r->c->read_callback = NULL;
-
-    log_debugf(NULL, "status code: %d", r->status_code);
-    // TODO: write http headers and body
-    conn_close(r->c);
 }

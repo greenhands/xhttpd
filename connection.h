@@ -41,8 +41,9 @@ void handle_read_write(struct event *ev, struct kevent *kev, int events);
 
 struct conn* conn_new(struct event *ev, int fd);
 
+void conn_listen(struct conn *c, int events);
 void conn_close(struct conn *c);
 void conn_free(struct conn *c);
-void conn_empty_buff(struct conn *c);
+int conn_fulfill_buff(struct conn *c);
 
 #endif //XHTTPD_CONNECTION_H

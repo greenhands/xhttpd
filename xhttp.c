@@ -2,7 +2,7 @@
 
 #include "xhttp.h"
 
-int xhttp_create_bind_socket(const char *addr, int port){
+static int xhttp_create_bind_socket(const char *addr, int port){
     int on = 1;
     struct sockaddr_in address;
 
@@ -27,7 +27,7 @@ int xhttp_create_bind_socket(const char *addr, int port){
     return listen_fd;
 }
 
-void xhttp_init(struct xhttp *http) {
+static void xhttp_init(struct xhttp *http) {
     struct event *ev = event_init();
     set_connect_cb(ev, request_new);
 
@@ -44,10 +44,14 @@ void xhttp_init(struct xhttp *http) {
     // TODO: set http handler
 }
 
-void xhttp_start(struct xhttp *http) {
+static void xhttp_start(struct xhttp *http) {
     while (1) {
         event_dispatch(http->ev);
     }
+}
+
+void handle_http_request(struct request *r) {
+    log_debugf("handle_http_request", "method: %d url: %s", r->method, r->uri);
 }
 
 int main() {
