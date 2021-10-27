@@ -27,7 +27,7 @@ static int xhttp_create_bind_socket(const char *addr, int port){
     return listen_fd;
 }
 
-static void xhttp_init(struct xhttp *http) {
+void xhttp_init(struct xhttp *http) {
     struct event *ev = event_init();
     set_connect_cb(ev, request_new);
 
@@ -44,7 +44,7 @@ static void xhttp_init(struct xhttp *http) {
     // TODO: set http handler
 }
 
-static void xhttp_start(struct xhttp *http) {
+void xhttp_start(struct xhttp *http) {
     while (1) {
         event_dispatch(http->ev);
     }
@@ -52,6 +52,7 @@ static void xhttp_start(struct xhttp *http) {
 
 void handle_http_request(struct request *r) {
     log_debugf(__func__ , "handle method: %d url: %s", r->method, r->uri);
+    response(r);
 }
 
 int main() {

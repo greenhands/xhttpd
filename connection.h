@@ -9,7 +9,11 @@
 #include "event.h"
 #include "util.h"
 
-#define BUFF_SIZE 4096
+#ifdef DEBUG
+    #define BUFF_SIZE 64
+#else
+    #define BUFF_SIZE 4096
+#endif
 
 struct conn {
     int fd;
@@ -45,5 +49,9 @@ void conn_listen(struct conn *c, int events);
 void conn_close(struct conn *c);
 void conn_free(struct conn *c);
 int conn_fulfill_buff(struct conn *c);
+
+int conn_buff_flush(struct conn *c);
+int conn_buff_append_data(struct conn *c, char *buf, int size);
+int conn_buff_append_line(struct conn *c, char *buf, int size);
 
 #endif //XHTTPD_CONNECTION_H

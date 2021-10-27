@@ -6,6 +6,7 @@
 
 // consume one line from connection buf
 // return: 0 when got line, otherwise the caller need to try again
+// TODO: should move this function to connection.c
 static int request_read_line(struct request *r, struct conn *c) {
     char ch;
     int buff_size = sizeof(r->line_buf) - 1;
@@ -41,6 +42,7 @@ static void report_request(struct request *r) {
 // return: 0 means empty lines end, and has more content
 //         -1 means something wrong in request data
 //         EAGAIN means data not ready, need to call it later (by io event automatically)
+// TODO: should move this function to connection.c
 static int discard_empty_line(struct request *r, struct conn *c) {
     while (c->read_p < c->valid_p) {
         char ch = c->r_buf[c->read_p];
@@ -300,6 +302,8 @@ void request_new(struct conn *c) {
     r->header_len = 0;
     r->content_len = 0;
     r->body_end = 0;
+    r->res_header_len = 0;
+    r->res_body_len = 0;
 
     r->status_code = HTTP_OK;
 
@@ -318,4 +322,9 @@ void request_free(struct request *r) {
         mem_free(r->headers[i].value);
     }
     mem_free(r->request_body);
+    for (int i = 0; i < r->res_header_len; ++i) {
+        mem_free(r->res_headers[i].key);
+        mem_free(r->res_headers[i].value);
+    }
+    mem_free(r->response_body);
 }

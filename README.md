@@ -8,11 +8,12 @@
 - [ ] deamon模式
 - [ ] 接收信号
 - [ ] 定时器
+- [ ] 请求超时机制
 - [ ] 日志文件
 - [ ] 多线程、线程池
 
 ### 优化
-- [ ] buffer可以封装一下
+- [ ] buffer可以封装一下（参考golang的bufio库）
 
 ### 支持的Content-Type
 - [ ] application/x-www-form-urlencoded

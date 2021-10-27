@@ -23,6 +23,7 @@ struct xhttp {
     int req_size;
 };
 
-void handle_http_request(struct request *r);
+void xhttp_init(struct xhttp *http);
+void xhttp_start(struct xhttp *http);
 
 #endif //XHTTPD_XHTTP_H

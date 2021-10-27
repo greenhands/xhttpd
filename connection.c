@@ -34,9 +34,10 @@ void handle_connection(struct event *ev, struct kevent *kev, int events){
 }
 
 // copy data from socket buff until r_buf if full or data is empty
-// return:  0 ok, r_buf is full now
+// return:  0 fulfill the r_buf, and may have more data in socket buff
 //          -1 something wrong, need to close connection
-//          EAGAIN data empty, need to listen for io event
+//          EAGAIN read all data from socket buff, and no guarantee r_buf has data,
+//                 need to listen for next read event
 static int copy_socket_buff(struct conn *c) {
     while(c->valid_p < sizeof(c->r_buf)) {
         int n = recv(c->fd, c->r_buf+c->valid_p, sizeof(c->r_buf) - c->valid_p, 0);
@@ -70,27 +71,36 @@ static void conn_read(struct conn *c){
         c->read_callback(c);
 }
 
-static int conn_send_buff(struct conn *c, char *b, int buf_len) {
+// send w_buf to socket
+// return:  -1 error occurs on write, connection closed
+//          0 send all buff, w_buf is empty now
+//          EAGAIN buff not completely sent, need to continue on next write event
+int conn_buff_flush(struct conn *c) {
     // if connection is closed, send nothing
     if (c->fd <= 0)
         return -1;
-
-    int n = write(c->fd, b, buf_len);
-    if (n == -1) {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            conn_listen(c, EVENT_WRITE);
-            return 0;
-        }else {
-            log_debugf(__func__, "send error: %s", strerror(errno));
-            conn_close(c);
-            return -1;
+    while (c->w_write < c->w_len) {
+        int n = write(c->fd, c->w_buf + c->w_write, c->w_len - c->w_write);
+        if (n == -1) {
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                conn_listen(c, EVENT_WRITE);
+                return EAGAIN;
+            }else {
+                log_warnf(__func__, "socket send error: %s", strerror(errno));
+                conn_close(c);
+                return -1;
+            }
         }
+        c->w_write += n;
     }
-    return n;
+    c->w_write = c->w_len = 0;
+    return 0;
 }
 
 static void conn_write(struct conn *c){
     log_debug(__func__ );
+    if (conn_buff_flush(c) != 0)
+        return;
 
     if (c->write_callback)
         c->write_callback(c);
@@ -146,5 +156,58 @@ int conn_fulfill_buff(struct conn *c) {
     int ret = copy_socket_buff(c);
     if (ret == -1)
         return -1;
+    return 0;
+}
+
+// return size of actual appended buff
+//        -1 when error occurs
+int conn_buff_append_data(struct conn *c, char *buf, int size) {
+    if (c->w_write == c->w_len)
+        c->w_write = c->w_len = 0;
+
+    int send_n = 0, left_n = size;
+    while (send_n < size) {
+        if (c->w_len + left_n > BUFF_SIZE) {
+            int free = BUFF_SIZE - c->w_len;
+            memmove(c->w_buf+c->w_len, buf + send_n, free);
+            c->w_len = BUFF_SIZE;
+            send_n += free;
+            left_n -= free;
+
+            int ret = conn_buff_flush(c);
+            if (ret == -1)
+                return -1;
+            if (ret == EAGAIN)
+                return send_n;
+        }else {
+            memmove(c->w_buf+c->w_len, buf + send_n, left_n);
+            c->w_len += left_n;
+            return size;
+        }
+    }
+    return size;
+}
+
+// append line which can not be truncated
+// return   0 append success
+//          -1 line size too large or error
+//          EAGAIN currently has no space for line
+int conn_buff_append_line(struct conn *c, char *buf, int size) {
+    if (c->w_write == c->w_len)
+        c->w_write = c->w_len = 0;
+
+    if (size > BUFF_SIZE) {
+        conn_close(c);
+        return -1;
+    }
+    if (c->w_len + size > BUFF_SIZE) {
+        // buff space not enough, try to send buff
+        int ret = conn_buff_flush(c);
+        if (ret != 0)
+            return ret;
+    }
+
+    memmove(c->w_buf+c->w_len, buf, size);
+    c->w_len += size;
     return 0;
 }

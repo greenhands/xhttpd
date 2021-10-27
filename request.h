@@ -6,7 +6,6 @@
 #define XHTTPD_REQUEST_H
 
 #include "common.h"
-#include "xhttp.h"
 #include "connection.h"
 #include "response.h"
 #include "status.h"
@@ -36,14 +35,20 @@ struct request {
     struct header headers[HEADER_SIZE];
     int header_len;
     int content_len;
-    char *request_body;
     int body_end;
+    char *request_body;
 
     // below is response contents
     int status_code;
+    struct header res_headers[HEADER_SIZE];
+    int res_header_len;
+    int res_body_len;
+    char *response_body;
 };
 
 void request_new(struct conn *c);
 void request_free(struct request *r);
+
+extern void handle_http_request(struct request *r);
 
 #endif //XHTTPD_REQUEST_H
