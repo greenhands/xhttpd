@@ -14,7 +14,7 @@ static int request_read_line(struct request *r, struct conn *c) {
 
     while (r->line_end < buff_size && c->read_p < c->valid_p) {
         ch = c->r_buf[c->read_p++];
-        if (ch != '\r') {
+        if (ch != '\r' && ch != '\n') {
             buf[r->line_end++] = ch;
         }
 
@@ -22,7 +22,7 @@ static int request_read_line(struct request *r, struct conn *c) {
             if (conn_fulfill_buff(c) == -1) return -1;
         }
         if (ch == '\n') {
-            buf[r->line_end-1] = '\0';
+            buf[r->line_end++] = '\0';
             return 0;
         }
     }
