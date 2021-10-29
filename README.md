@@ -1,5 +1,7 @@
 # xhttpd
-一个简单的http服务器，用来练习网络编程和服务器编程
+一个简单的http服务器，用来练习网络编程和服务器编程。
+
+主要参考了[Tinyhttpd](https://github.com/EZLippi/Tinyhttpd)、[libevent](https://github.com/libevent/libevent)、[nginx](https://github.com/nginx/nginx)以及[《linux高性能服务器编程》](https://book.douban.com/subject/24722611/)。
 
 ### Todo
 - [ ] GET
