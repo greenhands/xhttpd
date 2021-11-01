@@ -32,6 +32,8 @@ struct request {
     int method;
     char *uri;
     char *version;
+    char *path;
+    char *query;
     struct header headers[HEADER_SIZE];
     int header_len;
     int content_len;

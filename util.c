@@ -30,3 +30,9 @@ char* alloc_copy_string(char *str) {
     strcpy(new_str, str);
     return new_str;
 }
+
+char* alloc_copy_nstring(char *str, int n) {
+    char *new_str = mem_calloc(n+1, sizeof(char));
+    memmove(new_str, str, n);
+    return new_str;
+}

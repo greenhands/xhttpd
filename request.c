@@ -205,6 +205,22 @@ static void get_request_headers(struct conn *c) {
     }
 }
 
+static void parse_request_uri(struct request *r) {
+    char *uri = r->uri;
+
+    int n_path = strcspn(uri, "?");
+    r->path = alloc_copy_nstring(uri, n_path);
+    log_debugf(__func__, "parse path: %s", r->path);
+
+    if (*(uri+n_path) == '\0')
+        return;
+
+    uri += n_path+1;
+    int n_query = strcspn(uri, "#");
+    r->query = alloc_copy_nstring(uri, n_query);
+    log_debugf(__func__, "parse query: %s", r->query);
+}
+
 static int parse_request_line(struct request *r) {
     char *token, *line = r->line_buf;
     int len;
@@ -243,6 +259,8 @@ static int parse_request_line(struct request *r) {
         return -1;
     }
     r->version = alloc_copy_string(token);
+
+    parse_request_uri(r);
 
     log_debugf("parse_request_line", "method: [%d], uri: [%s], version: [%s]", r->method, r->uri, r->version);
 
@@ -317,6 +335,8 @@ void request_free(struct request *r) {
     // dealloc uri, version and headers
     mem_free(r->uri);
     mem_free(r->version);
+    mem_free(r->path);
+    mem_free(r->query);
     for (int i = 0; i < r->header_len; ++i) {
         mem_free(r->headers[i].key);
         mem_free(r->headers[i].value);

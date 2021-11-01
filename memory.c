@@ -22,5 +22,6 @@ void* mem_realloc(void *ptr, size_t new_size){
 }
 
 void mem_free(void *ptr){
-    free(ptr);
+    if (ptr)
+        free(ptr);
 }

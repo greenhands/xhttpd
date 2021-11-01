@@ -16,5 +16,6 @@ int set_nonblocking(int fd);
 
 char* get_token(char *str, int *len);
 char* alloc_copy_string(char *str);
+char* alloc_copy_nstring(char *str, int n);
 
 #endif //XHTTPD_UTIL_H
