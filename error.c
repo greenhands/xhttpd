@@ -8,6 +8,8 @@ void log_m_(int level, const char *msg){
     const char *level_str;
     switch (level) {
         case LOG_DEBUG:
+            if (!DEBUG)
+                return;
             level_str = "DEBUG";
             break;
         case LOG_INFO:

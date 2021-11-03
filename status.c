@@ -6,14 +6,14 @@
 char* status_text(enum http_code code) {
     switch (code) {
         case HTTP_OK:
-            return "OK";
+            return "200 OK";
         case HTTP_BAD_REQUEST:
-            return "Bad Request";
+            return "401 Bad Request";
         case HTTP_NOT_FOUND:
-            return "Not Found";
+            return "404 Not Found";
         case HTTP_METHOD_NOT_ALLOW:
-            return "Method Not Allowed";
+            return "405 Method Not Allowed";
         default:
-            return "UNKNOWN";
+            return "0 UNKNOWN";
     }
 }

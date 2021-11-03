@@ -15,6 +15,11 @@
 
 #define N_REQUEST 64
 
+#define DOC_ROOT    "www"
+#define DOC_INDEX   "index.html"
+
+#define HTTP_VER    "HTTP/1.1"
+
 struct xhttp {
     struct event *ev;
     int allowed_methods;

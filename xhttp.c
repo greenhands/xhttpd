@@ -20,7 +20,7 @@ static int xhttp_create_bind_socket(const char *addr, int port){
     if (bind(listen_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
         log_error(strerror(errno));
 
-    if (listen(listen_fd, 64) < 0)
+    if (listen(listen_fd, 1024) < 0)
         log_error(strerror(errno));
 
     log_infof(NULL,"server listened on %s:%d", addr, port);
@@ -50,9 +50,40 @@ void xhttp_start(struct xhttp *http) {
     }
 }
 
+static void xhttp_send_file(struct request *r, char *filename) {
+
+}
+
+static void xhttp_handle_get(struct request *r) {
+    char filename[FILENAME_MAX];
+    snprintf(filename, FILENAME_MAX, "%s%s", DOC_ROOT, r->path);
+    if (r->path[strlen(r->path)-1] == '/') {
+        int file_len = strlen(filename);
+        snprintf(filename+file_len, FILENAME_MAX-file_len, DOC_INDEX);
+    }
+    log_debugf(__func__ , "GET %s", filename);
+}
+
+static void xhttp_handle_post(struct request *r) {
+
+}
+
 void handle_http_request(struct request *r) {
     log_debugf(__func__ , "handle method: %d url: %s", r->method, r->uri);
-    response(r);
+
+    char *body = "<p>Hello World!</p>";
+    response_set_header(r, "Content-Type", "text/plain");
+    response_body(r, body, strlen(body));
+    return;
+
+    switch (r->method) {
+        case HTTP_GET:
+            xhttp_handle_get(r);
+            break;
+        case HTTP_POST:
+            xhttp_handle_post(r);
+            break;
+    }
 }
 
 int main() {

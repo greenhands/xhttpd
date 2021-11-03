@@ -254,7 +254,7 @@ static int parse_request_line(struct request *r) {
         r->status_code = HTTP_BAD_REQUEST;
         return -1;
     }
-    if (!strequal(token, "HTTP/1.1")) {
+    if (!strequal(token, HTTP_VER)) {
         r->status_code = HTTP_BAD_REQUEST;
         return -1;
     }
@@ -321,7 +321,9 @@ void request_new(struct conn *c) {
     r->content_len = 0;
     r->body_end = 0;
     r->res_header_len = 0;
+    r->res_header_curr = 0;
     r->res_body_len = 0;
+    r->res_body_curr = 0;
 
     r->status_code = HTTP_OK;
 
@@ -333,18 +335,18 @@ void request_new(struct conn *c) {
 void request_free(struct request *r) {
     r->c = NULL;
     // dealloc uri, version and headers
-    mem_free(r->uri);
-    mem_free(r->version);
-    mem_free(r->path);
-    mem_free(r->query);
+    mem_free_set_null(r->uri);
+    mem_free_set_null(r->version);
+    mem_free_set_null(r->path);
+    mem_free_set_null(r->query);
     for (int i = 0; i < r->header_len; ++i) {
-        mem_free(r->headers[i].key);
-        mem_free(r->headers[i].value);
+        mem_free_set_null(r->headers[i].key);
+        mem_free_set_null(r->headers[i].value);
     }
-    mem_free(r->request_body);
+    mem_free_set_null(r->request_body);
     for (int i = 0; i < r->res_header_len; ++i) {
-        mem_free(r->res_headers[i].key);
-        mem_free(r->res_headers[i].value);
+        mem_free_set_null(r->res_headers[i].key);
+        mem_free_set_null(r->res_headers[i].value);
     }
-    mem_free(r->response_body);
+    mem_free_set_null(r->response_body);
 }

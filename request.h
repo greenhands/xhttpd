@@ -44,7 +44,9 @@ struct request {
     int status_code;
     struct header res_headers[HEADER_SIZE];
     int res_header_len;
+    int res_header_curr;
     int res_body_len;
+    int res_body_curr;
     char *response_body;
 };
 
