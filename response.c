@@ -28,7 +28,6 @@ static void write_response_body(struct conn *c) {
         }
     }
 
-
     c->write_callback = finish_write_response;
     finish_write_response(c);
 }
@@ -81,10 +80,6 @@ void response_set_header(struct request *r, char *name, char *value) {
 void response(struct request *r) {
     set_common_response_header(r);
 
-    if (r->status_code != HTTP_OK) {
-        response_error(r, r->status_code);
-        return;
-    }
     // close read callback
     r->c->read_callback = NULL;
     r->c->write_callback = write_response_line;

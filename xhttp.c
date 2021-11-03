@@ -65,16 +65,11 @@ static void xhttp_handle_get(struct request *r) {
 }
 
 static void xhttp_handle_post(struct request *r) {
-
+    response_error(r, HTTP_METHOD_NOT_ALLOW);
 }
 
 void handle_http_request(struct request *r) {
     log_debugf(__func__ , "handle method: %d url: %s", r->method, r->uri);
-
-    char *body = "<p>Hello World!</p>";
-    response_set_header(r, "Content-Type", "text/plain");
-    response_body(r, body, strlen(body));
-    return;
 
     switch (r->method) {
         case HTTP_GET:
