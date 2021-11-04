@@ -18,6 +18,11 @@ struct header {
     char *value;
 };
 
+struct file_sender {
+    int fd;
+    int seek;
+};
+
 struct request {
     struct xhttp *http;
     struct conn *c;
@@ -48,6 +53,7 @@ struct request {
     int res_body_len;
     int res_body_curr;
     char *response_body;
+    struct file_sender fs;
 };
 
 void request_new(struct conn *c);

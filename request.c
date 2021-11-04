@@ -324,6 +324,7 @@ void request_new(struct conn *c) {
     r->res_header_curr = 0;
     r->res_body_len = 0;
     r->res_body_curr = 0;
+    r->fs.seek = 0;
 
     r->status_code = HTTP_OK;
 
@@ -349,4 +350,8 @@ void request_free(struct request *r) {
         mem_free_set_null(r->res_headers[i].value);
     }
     mem_free_set_null(r->response_body);
+    if (r->fs.fd) {
+        close(r->fs.fd);
+        r->fs.fd = 0;
+    }
 }

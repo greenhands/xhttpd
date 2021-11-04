@@ -62,6 +62,10 @@ static void xhttp_handle_get(struct request *r) {
         snprintf(filename+file_len, FILENAME_MAX-file_len, DOC_INDEX);
     }
     log_debugf(__func__ , "GET %s", filename);
+
+    struct stat st;
+    if (stat(filename, &st) == -1)
+        return response_error(r, HTTP_NOT_FOUND);
 }
 
 static void xhttp_handle_post(struct request *r) {

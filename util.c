@@ -7,6 +7,16 @@
 static const int int_len = 16;
 static char *int_str;
 
+struct ext_content_type {
+    char *ext;
+    char *content_type;
+};
+
+static struct ext_content_type exts[] = {
+        {".html", "text/html"},
+        {NULL, NULL},
+};
+
 int set_nonblocking(int fd){
     int old_opt = fcntl(fd, F_GETFL);
     int new_opt = old_opt | O_NONBLOCK;
@@ -45,4 +55,13 @@ char* int_to_string(int num) {
         int_str = mem_calloc(int_len, sizeof(char));
     snprintf(int_str, int_len, "%d", num);
     return int_str;
+}
+
+char* ext_to_content_type(char *ext) {
+    for (int i = 0;; ++i) {
+        if (exts[i].ext == NULL)
+            return "application/oct-stream";
+        if (strequal(exts[i].ext, ext))
+            return exts[i].content_type;
+    }
 }

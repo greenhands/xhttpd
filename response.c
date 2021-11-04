@@ -13,6 +13,10 @@ static void finish_write_response(struct conn *c) {
     conn_close(c);
 }
 
+static void send_response_file(struct conn *c) {
+    //TODO: flush buff and send file
+}
+
 static void write_response_body(struct conn *c) {
     log_debug(__func__ );
 
@@ -99,5 +103,16 @@ void response_body(struct request *r, char *body, int body_len) {
         r->res_body_len = body_len;
     }
     response_set_header(r, "Content-Length", int_to_string(body_len));
+    response(r);
+}
+
+void response_file(struct request *r, char *filename, struct stat st) {
+    char *ext = strrchr(filename, '.');
+    response_set_header(r, "Content-Type", ext_to_content_type(ext));
+    if (st.st_size == 0) {
+        response(r);
+        return;
+    }
+    response_set_header(r, "Content-Length", int_to_string(st.st_size));
     response(r);
 }
