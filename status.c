@@ -13,6 +13,8 @@ char* status_text(enum http_code code) {
             return "404 Not Found";
         case HTTP_METHOD_NOT_ALLOW:
             return "405 Method Not Allowed";
+        case HTTP_INTERNAL_ERROR:
+            return "500 Internal Server Error";
         default:
             return "0 UNKNOWN";
     }

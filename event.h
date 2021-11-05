@@ -12,8 +12,9 @@
 #define EVENT_READ  0x0001
 #define EVENT_WRITE 0x0002
 
-#define N_EVENT  64
-#define N_CONN   64
+#define N_EVENT         64
+#define N_CONN          64
+#define N_FD_CLOSE      1024
 
 #define MILLISECOND 1000000
 
@@ -28,6 +29,9 @@ struct event {
     int change_size;
     struct kevent *events;
     int event_size;
+
+    int fd_close[N_FD_CLOSE];
+    int fd_close_len;
 
     struct conn *connections;
     int conn_size;
@@ -47,9 +51,10 @@ struct event_change {
 
 struct event* event_init();
 void event_dispatch(struct event *ev);
-void event_dealloc(struct event *ev);
 void event_add(struct event *ev, int fd, int events, event_cb cb);
 void event_del(struct  event *ev, int fd, int events);
+void event_dealloc(struct event *ev);
+int event_close_fd(struct event *ev, int fd);
 
 void set_connect_cb(struct event *ev, void (*cb) (struct conn *c));
 

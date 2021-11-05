@@ -83,10 +83,26 @@ void event_dispatch(struct event *ev){
         struct event_change *change = (struct event_change*)kev.udata;
         change->cb(ev, &kev, events);
     }
+    // actually close fd, prevent from reuse fd between loop
+    for (int i = 0; i < ev->fd_close_len; ++i) {
+        if (close(ev->fd_close[i]) < 0) {
+            log_warnf(__func__ , "fd: %d error occurs when close: %s", ev->fd_close[i], strerror(errno));
+        }
+    }
+    ev->fd_close_len = 0;
 }
 
 void event_dealloc(struct event *ev){
     mem_free(ev);
+}
+
+int event_close_fd(struct event *ev, int fd) {
+    if (ev->fd_close_len == N_FD_CLOSE)
+        return close(fd);
+    else {
+        ev->fd_close[ev->fd_close_len++] = fd;
+        return 0;
+    }
 }
 
 static int get_or_create_event_change(struct event *ev, int fd, int filter){

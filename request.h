@@ -21,6 +21,7 @@ struct header {
 struct file_sender {
     int fd;
     int seek;
+    long long len;
 };
 
 struct request {

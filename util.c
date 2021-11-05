@@ -12,7 +12,7 @@ struct ext_content_type {
     char *content_type;
 };
 
-static struct ext_content_type exts[] = {
+static struct ext_content_type ext_table[] = {
         {".html", "text/html"},
         {NULL, NULL},
 };
@@ -59,9 +59,9 @@ char* int_to_string(int num) {
 
 char* ext_to_content_type(char *ext) {
     for (int i = 0;; ++i) {
-        if (exts[i].ext == NULL)
+        if (ext_table[i].ext == NULL)
             return "application/oct-stream";
-        if (strequal(exts[i].ext, ext))
-            return exts[i].content_type;
+        if (strequal(ext_table[i].ext, ext))
+            return ext_table[i].content_type;
     }
 }

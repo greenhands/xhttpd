@@ -7,8 +7,9 @@
 void handle_read_write(struct event *ev, struct kevent *kev, int events) {
     struct conn *c = event_find_connection(ev, kev->ident);
     if (!c) {
-        log_warn("something wrong, connection missing");
+        log_infof(__func__ ,"fd: %d  event: %d ignore closed connection", kev->ident, events);
         event_del(ev, kev->ident, kev->filter);
+        return;
     }
     if (events & EVENT_READ && c->on_read)
         c->on_read(c);
@@ -42,7 +43,7 @@ static int copy_socket_buff(struct conn *c) {
     while(c->valid_p < sizeof(c->r_buf)) {
         int n = recv(c->fd, c->r_buf+c->valid_p, sizeof(c->r_buf) - c->valid_p, 0);
         if (n == 0) {
-            log_info("connection close by remote");
+            log_infof(__func__ ,"fd: %d connection close by remote", c->fd);
             conn_close(c);
             return -1;
         }
@@ -63,7 +64,7 @@ static int copy_socket_buff(struct conn *c) {
 }
 
 static void conn_read(struct conn *c){
-    log_debug(__func__ );
+    log_debugf(__func__ , "read fd: %d", c->fd);
     if (copy_socket_buff(c) == -1)
         return;
 
@@ -86,7 +87,7 @@ int conn_buff_flush(struct conn *c) {
                 conn_listen(c, EVENT_WRITE);
                 return EAGAIN;
             }else {
-                log_warnf(__func__, "socket send error: %s", strerror(errno));
+                log_warnf(__func__, "fd: %d socket send error: %s", c->fd, strerror(errno));
                 conn_close(c);
                 return -1;
             }
@@ -98,7 +99,7 @@ int conn_buff_flush(struct conn *c) {
 }
 
 static void conn_write(struct conn *c){
-    log_debug(__func__ );
+    log_debugf(__func__ , "write fd: %d", c->fd);
     if (conn_buff_flush(c) != 0)
         return;
 
@@ -114,25 +115,25 @@ struct conn* conn_new(struct event *ev, int fd){
     c->on_read = conn_read;
     c->on_write = conn_write;
 
-    log_infof(NULL, "new connection from %s:%d", c->remote, c->port);
+    log_infof(NULL, "new connection from %s:%d, create fd: %d", c->remote, c->port, fd);
 
     return c;
 }
 
 void conn_listen(struct conn *c, int events) {
-    log_debugf(__func__ , "listen event: %d", events);
+    log_debugf(__func__ , "fd: %d listen event: %d", c->fd, events);
     event_add(c->ev, c->fd, events, handle_read_write);
 }
 
 // TODO: important, waiting to complete
 void conn_close(struct conn *c) {
-    log_info("close connection by server");
+    log_infof(__func__ ,"fd: %d close connection by server", c->fd);
 
     event_del(c->ev, c->fd, EVENT_READ|EVENT_WRITE);
     if (c->close_callback)
         c->close_callback(c);
-    if (close(c->fd) < 0) {
-        log_warnf(strerror(errno), "error occurs when close connection %s", c->remote);
+    if (event_close_fd(c->ev, c->fd) < 0) {
+        log_warnf(strerror(errno), "fd: %d error occurs when close connection %s", c->fd, c->remote);
     }
     conn_free(c);
 }
@@ -210,4 +211,27 @@ int conn_buff_append_line(struct conn *c, char *buf, int size) {
     memmove(c->w_buf+c->w_len, buf, size);
     c->w_len += size;
     return 0;
+}
+
+// send file to socket use sendfile()
+// return   0 finish
+//          -1 error occurs and close connection
+//          EAGAIN to be continued
+int conn_send_file(struct file_sender *f, struct conn *c) {
+    int ret = sendfile(f->fd, c->fd, f->seek, &f->len, NULL, 0);
+    if (ret == -1) {
+        if (errno == EAGAIN || errno == EINTR) {
+            goto again;
+        } else{
+            conn_close(c);
+            return -1;
+        }
+    }
+    if (f->len == 0) {
+        return 0;
+    }
+again:
+    f->seek += f->len;
+    conn_listen(c, EVENT_WRITE);
+    return EAGAIN;
 }

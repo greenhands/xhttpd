@@ -7,14 +7,25 @@ static void finish_write_response(struct conn *c) {
     log_debug(__func__ );
 
     struct request *r = c->data;
-
     if (conn_buff_flush(c) != 0)
         return;
+
     conn_close(c);
 }
 
 static void send_response_file(struct conn *c) {
-    //TODO: flush buff and send file
+    log_debug(__func__ );
+
+    struct request *r = c->data;
+    if (conn_buff_flush(c) != 0)
+        return;
+
+    r->fs.len = 0;
+    int ret = conn_send_file(&r->fs, c);
+    if (ret == -1 || (ret == EAGAIN && r->fs.seek < r->res_body_len))
+        return;
+
+    conn_close(c);
 }
 
 static void write_response_body(struct conn *c) {
@@ -52,8 +63,13 @@ static void write_response_headers(struct conn *c) {
         return;
     }
 
-    c->write_callback = write_response_body;
-    write_response_body(c);
+    if (r->fs.fd > 0) {
+        c->write_callback = send_response_file;
+        send_response_file(c);
+    }else{
+        c->write_callback = write_response_body;
+        write_response_body(c);
+    }
 }
 
 static void write_response_line(struct conn *c) {
@@ -107,6 +123,8 @@ void response_body(struct request *r, char *body, int body_len) {
 }
 
 void response_file(struct request *r, char *filename, struct stat st) {
+    log_debugf(__func__ , "file: %s", filename);
+
     char *ext = strrchr(filename, '.');
     response_set_header(r, "Content-Type", ext_to_content_type(ext));
     if (st.st_size == 0) {
@@ -114,5 +132,12 @@ void response_file(struct request *r, char *filename, struct stat st) {
         return;
     }
     response_set_header(r, "Content-Length", int_to_string(st.st_size));
+    int fd = open(filename, O_RDONLY|O_NONBLOCK);
+    if (fd == -1) {
+        log_warn(strerror(errno));
+        r->status_code = HTTP_NOT_FOUND;
+    }
+    r->fs.fd = fd;
+    r->res_body_len = st.st_size;
     response(r);
 }

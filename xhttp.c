@@ -66,6 +66,7 @@ static void xhttp_handle_get(struct request *r) {
     struct stat st;
     if (stat(filename, &st) == -1)
         return response_error(r, HTTP_NOT_FOUND);
+    response_file(r, filename, st);
 }
 
 static void xhttp_handle_post(struct request *r) {
