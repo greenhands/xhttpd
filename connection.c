@@ -108,8 +108,9 @@ static void conn_write(struct conn *c){
 }
 
 struct conn* conn_new(struct event *ev, int fd){
-    struct conn *c = event_get_free_connection(ev);
-    c->fd = fd;
+    log_debugf(__func__ , "fd: %d new connection", fd);
+
+    struct conn *c = event_get_free_connection(ev, fd);
     inet_ntop(AF_INET, &ev->address->sin_addr, c->remote, sizeof(c->remote));
     c->port = ntohs(ev->address->sin_port);
     c->on_read = conn_read;
@@ -140,7 +141,6 @@ void conn_close(struct conn *c) {
 
 void conn_free(struct conn *c) {
     c->fd = -1;
-    c->pos = -1;
     c->valid_p = 0;
     c->read_p = 0;
     c->w_len = 0;

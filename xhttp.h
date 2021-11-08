@@ -13,7 +13,7 @@
 
 #define XHTTP_LISTEN_PORT 20022
 
-#define N_REQUEST 64
+#define N_REQUEST 1024
 
 #define DOC_ROOT    "www"
 #define DOC_INDEX   "index.html"
