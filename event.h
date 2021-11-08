@@ -15,6 +15,7 @@
 #define N_EVENT         64
 #define N_CONN          64
 #define N_FD_CLOSE      1024
+#define N_HASH          (2<<8)
 
 #define MILLISECOND 1000000
 
@@ -24,11 +25,11 @@ struct event {
     struct xhttp *http;
 
     int kqfd;
-    struct event_change *changes;
     int n_changes;
-    int change_size;
-    struct kevent *events;
+    struct event_change **ch_hash;
+    struct event_change *ch_free;
     int event_size;
+    struct kevent *events;
 
     int fd_close[N_FD_CLOSE];
     int fd_close_len;
@@ -47,6 +48,7 @@ struct event_change {
     int filter;
 
     event_cb cb;
+    struct event_change *next;
 };
 
 struct event* event_init();
