@@ -32,15 +32,17 @@ struct event* event_init(){
     ev->address_len = sizeof(struct sockaddr_in);
     ev->address = mem_calloc(1, ev->address_len);
 
-    ev->n_changes = 0;
-    ev->ch_hash = mem_calloc(N_HASH, sizeof(struct event_change*));
     ev->ch_free = mem_calloc(1, sizeof(struct event_change));
 
     ev->event_size = N_EVENT;
     ev->events = mem_calloc(ev->event_size, sizeof(struct kevent));
 
     ev->conn_size = N_CONN;
-    ev->connections = mem_calloc(ev->conn_size, sizeof(struct conn));
+    ev->connections = mem_calloc(ev->conn_size, sizeof(struct conn*));
+    struct conn *ptr = mem_calloc(ev->conn_size, sizeof(struct conn));
+    for (int i = 0; i < ev->conn_size; ++i) {
+        ev->connections[i] = &ptr[i];
+    }
 
     return ev;
 }
@@ -101,11 +103,7 @@ int event_close_fd(struct event *ev, int fd) {
 
 static struct event_change* event_change_get_list(struct event *ev, int fd) {
     int key = fd & (N_HASH - 1);
-    if (!ev->ch_hash[key]) {
-        struct event_change *l = mem_calloc(1, sizeof(struct event_change));
-        ev->ch_hash[key] = l;
-    }
-    return ev->ch_hash[key];
+    return &ev->ch_hash[key];
 }
 
 static struct event_change* event_change_list_remove(struct event_change *l, struct event_change *ec) {
@@ -126,10 +124,18 @@ static void event_change_list_push(struct event_change *l, struct event_change *
     l->next = ec;
 }
 
-static struct event_change* event_change_list_pop(struct event_change *l) {
-    if (l->next)
-        return event_change_list_remove(l, l->next);
-    return NULL;
+static struct event_change* event_change_list_new(struct event *ev) {
+    struct event_change *free = ev->ch_free;
+    if (!free->next) {
+        int alloc_size = ev->n_changes > 16 ? ev->n_changes : 16;
+        struct event_change *arr = mem_calloc(alloc_size, sizeof(struct event_change));
+        free->next = arr;
+        for (int i = 0; i < alloc_size-1; ++i) {
+            arr[i].next = arr+(i+1);
+        }
+        log_debugf(__func__ , "alloc new event_change, size: %d", alloc_size);
+    }
+    return event_change_list_remove(free, free->next);
 }
 
 static struct event_change* find_event_change(struct event *ev, int fd, int filter) {
@@ -158,8 +164,7 @@ static void remove_event_change(struct event *ev, struct event_change *ec) {
 static struct event_change* get_or_create_event_change(struct event *ev, int fd, int filter){
     struct event_change *ch = find_event_change(ev, fd, filter);
     if (ch) return ch;
-    ch = event_change_list_pop(ev->ch_free);
-    if (!ch) ch = mem_calloc(1, sizeof(struct event_change));
+    ch = event_change_list_new(ev);
     ch->fd = fd;
     ch->filter = filter;
     add_event_change(ev, ch);
@@ -212,29 +217,29 @@ void set_connect_cb(struct event *ev, void (*cb) (struct conn *c)) {
     ev->on_connection = cb;
 }
 
-struct conn* event_get_free_connection(struct event *ev){
-    int pos = -1;
-    for (int i = 0; i < ev->conn_size; ++i) {
-        if (ev->connections[i].pos != i)
-            pos = i;
+struct conn* event_get_free_connection(struct event *ev, int fd){
+    if (fd >= ev->conn_size) {
+        int start = ev->conn_size;
+        while (ev->conn_size <= fd)
+            ev->conn_size *= 2;
+        ev->connections = mem_realloc(ev->connections, ev->conn_size* sizeof(struct conn*));
+        struct conn *ptr = mem_calloc(ev->conn_size-start, sizeof(struct conn));
+        for (int i = start; i < ev->conn_size; ++i) {
+            ev->connections[i] = &ptr[i-start];
+        }
+        log_debugf(__func__ , "enlarge connection size to: %d", ev->conn_size);
     }
-    if (pos < 0) {
-        pos = ev->conn_size;
-        ev->conn_size *= 2;
-        ev->connections = mem_realloc(ev->connections, ev->conn_size * sizeof(struct conn));
-    }
-    ev->connections[pos].ev = ev;
-    ev->connections[pos].pos = pos;
+    struct conn *c = ev->connections[fd];
+    if (c->fd > 0)
+        log_warnf(__func__ , "fd: %d connection reused before free", fd);
+    c->fd = fd;
+    c->ev = ev;
 
-    return &ev->connections[pos];
+    return c;
 }
 
 struct conn* event_find_connection(struct event *ev, int fd){
-    for (int i = 0; i < ev->conn_size; ++i) {
-        if (ev->connections[i].pos != i)
-            continue;
-        if (ev->connections[i].fd == fd)
-            return &ev->connections[i];
-    }
-    return NULL;
+    if (fd >= ev->conn_size || ev->connections[fd]->fd < 0)
+        return NULL;
+    return ev->connections[fd];
 }

@@ -21,12 +21,20 @@
 
 typedef void (*event_cb) (struct event *ev, struct kevent *kev, int events);
 
+struct event_change {
+    int fd;
+    int filter;
+
+    event_cb cb;
+    struct event_change *next;
+};
+
 struct event {
     struct xhttp *http;
 
     int kqfd;
     int n_changes;
-    struct event_change **ch_hash;
+    struct event_change ch_hash[N_HASH];
     struct event_change *ch_free;
     int event_size;
     struct kevent *events;
@@ -34,21 +42,13 @@ struct event {
     int fd_close[N_FD_CLOSE];
     int fd_close_len;
 
-    struct conn *connections;
+    struct conn **connections;
     int conn_size;
 
     struct sockaddr_in *address; //used for receive connection
     socklen_t address_len;
 
     void (*on_connection) (struct conn *c);
-};
-
-struct event_change {
-    int fd;
-    int filter;
-
-    event_cb cb;
-    struct event_change *next;
 };
 
 struct event* event_init();
@@ -60,7 +60,7 @@ int event_close_fd(struct event *ev, int fd);
 
 void set_connect_cb(struct event *ev, void (*cb) (struct conn *c));
 
-struct conn* event_get_free_connection(struct event *ev);
+struct conn* event_get_free_connection(struct event *ev, int fd);
 struct conn* event_find_connection(struct event *ev, int fd);
 
 #endif //XHTTPD_EVENT_H

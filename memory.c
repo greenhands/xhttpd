@@ -17,7 +17,6 @@ void* mem_realloc(void *ptr, size_t new_size){
     void *p = realloc(ptr, new_size);
     if (p == NULL)
         log_error(strerror(errno));
-
     return p;
 }
 
