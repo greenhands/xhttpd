@@ -308,6 +308,7 @@ static struct request* get_free_request(struct xhttp *http) {
     http->req_size *= 2;
     struct request *ptr = mem_realloc(http->reqs, http->req_size * sizeof(struct request));
     if (ptr != http->reqs) {
+        log_debugf(__func__ , "reallocate new address, correct element pointer");
         for (int i = 0; i < pos; ++i) {
             if (ptr[i].c != NULL)
                 ptr[i].c->data = (void *)&ptr[i];
