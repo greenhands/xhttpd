@@ -306,7 +306,15 @@ static struct request* get_free_request(struct xhttp *http) {
     }
     int pos = http->req_size;
     http->req_size *= 2;
-    http->reqs = mem_realloc(http->reqs, http->req_size * sizeof(struct request));
+    struct request *ptr = mem_realloc(http->reqs, http->req_size * sizeof(struct request));
+    if (ptr != http->reqs) {
+        for (int i = 0; i < pos; ++i) {
+            if (ptr[i].c != NULL)
+                ptr[i].c->data = (void *)&ptr[i];
+        }
+    }
+    http->reqs= ptr;
+    log_debugf(__func__ , "enlarge request size to: %d", http->req_size);
     return &http->reqs[pos];
 }
 

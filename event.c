@@ -12,7 +12,7 @@ void ensure_events_capacity(struct event *ev) {
             ev->event_size *= 2;
         ev->events = mem_realloc(ev->events, sizeof(struct kevent) * ev->event_size);
 
-        log_debugf(NULL, "enlarge event size to %d", ev->event_size);
+        log_debugf(NULL, "enlarge event size to: %d", ev->event_size);
     }
 }
 
