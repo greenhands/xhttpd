@@ -20,7 +20,6 @@ struct file_sender;
 
 struct conn {
     int fd;
-    int pos;
     struct event *ev;
 
     void (*on_read) (struct conn *c);
