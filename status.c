@@ -7,6 +7,8 @@ char* status_text(enum http_code code) {
     switch (code) {
         case HTTP_OK:
             return "200 OK";
+        case HTTP_NO_CONTENT:
+            return "204 No Content";
         case HTTP_BAD_REQUEST:
             return "401 Bad Request";
         case HTTP_NOT_FOUND:
