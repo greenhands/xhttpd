@@ -261,17 +261,17 @@ static void get_request_headers(struct conn *c) {
 static void parse_request_uri(struct request *r) {
     char *uri = r->uri;
 
-    int n_path = strcspn(uri, "?");
+    int n_path = strcspn(uri, "?#");
     r->path = alloc_copy_nstring(uri, n_path);
-    log_debugf(__func__, "parse path: %s", r->path);
+    log_debugf(__func__, "[path] %s", r->path);
 
-    if (*(uri+n_path) == '\0')
+    if (*(uri+n_path) != '?')
         return;
 
     uri += n_path+1;
     int n_query = strcspn(uri, "#");
     r->query = alloc_copy_nstring(uri, n_query);
-    log_debugf(__func__, "parse query: %s", r->query);
+    log_debugf(__func__, "[query] %s", r->query);
 }
 
 static int parse_request_line(struct request *r) {
