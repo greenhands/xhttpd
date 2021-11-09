@@ -18,7 +18,8 @@
 #define DOC_ROOT    "www"
 #define DOC_INDEX   "index.html"
 
-#define HTTP_VER    "HTTP/1.1"
+#define HTTP_VER_1_0    "HTTP/1.0"
+#define HTTP_VER_1_1    "HTTP/1.1"
 
 struct xhttp {
     struct event *ev;

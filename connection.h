@@ -10,11 +10,7 @@
 #include "request.h"
 #include "util.h"
 
-#ifdef DEBUG
-    #define BUFF_SIZE 64
-#else
-    #define BUFF_SIZE 4096
-#endif
+#define BUFF_SIZE 4096
 
 struct file_sender;
 
@@ -49,9 +45,10 @@ struct conn* conn_new(struct event *ev, int fd);
 
 void conn_listen(struct conn *c, int events);
 void conn_close(struct conn *c);
+void conn_keepalive(struct conn *c);
 void conn_free(struct conn *c);
 
-int conn_fulfill_buff(struct conn *c);
+int conn_buff_fulfill(struct conn *c);
 int conn_buff_flush(struct conn *c);
 int conn_buff_append_data(struct conn *c, char *buf, int size);
 int conn_buff_append_line(struct conn *c, char *buf, int size);

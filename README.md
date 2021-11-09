@@ -4,19 +4,20 @@
 主要参考了[Tinyhttpd](https://github.com/EZLippi/Tinyhttpd)、[libevent](https://github.com/libevent/libevent)、[nginx](https://github.com/nginx/nginx)以及[《linux高性能服务器编程》](https://book.douban.com/subject/24722611/)。
 
 ### Todo
-- [ ] GET
+- [x] GET
 - [ ] POST
-- [ ] 静态文件服务器
+- [x] 静态文件服务器
+- [x] 支持keep-alive
 - [ ] cgi
 - [ ] deamon模式
+- [ ] 日志文件
 - [ ] 接收信号
 - [ ] 定时器
 - [ ] 请求超时机制
-- [ ] 日志文件
 - [ ] 多线程、线程池
 
 ### 优化
 - [ ] buffer可以封装一下（参考golang的bufio库）
 
-### 支持的Content-Type
-- [ ] application/x-www-form-urlencoded
+### 功能
+- [ ] 支持POST application/x-www-form-urlencoded

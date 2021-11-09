@@ -14,6 +14,15 @@ struct ext_content_type {
 
 static struct ext_content_type ext_table[] = {
         {".html", "text/html"},
+        {".css", "text/css"},
+        {".xml", "text/plain"},
+        {".jpeg", "image/jpeg"},
+        {".jpg", "image/jpeg"},
+        {".png", "image/png"},
+        {".gif", "image/gif"},
+        {".svg", "image/svg+xml"},
+        {".js", "application/javascript"},
+        {".json", "application/json"},
         {NULL, NULL},
 };
 
@@ -50,6 +59,21 @@ char* alloc_copy_nstring(char *str, int n) {
     return new_str;
 }
 
+/**
+ * Copy string src to buf, if space in buf if not enough, alloc new buf
+ * @param buf dynamic allocated buff
+ * @param src source string
+ * @return
+ */
+char* copy_string(char *buf, char *src) {
+    if (!buf || strlen(buf) < strlen(src)) {
+        mem_free(buf);
+        return alloc_copy_string(src);
+    }
+    strcpy(buf, src);
+    return buf;
+}
+
 char* int_to_string(int num) {
     if (!int_str)
         int_str = mem_calloc(int_len, sizeof(char));
@@ -57,10 +81,16 @@ char* int_to_string(int num) {
     return int_str;
 }
 
+/**
+ * Detect response content-type simply by file extension,
+ * for more accurate method refer to https://mimesniff.spec.whatwg.org/#pattern-matching-algorithm
+ * @param ext file extension
+ * @return content-type
+ */
 char* ext_to_content_type(char *ext) {
     for (int i = 0;; ++i) {
         if (ext_table[i].ext == NULL)
-            return "application/oct-stream";
+            return "application/octet-stream";
         if (strequal(ext_table[i].ext, ext))
             return ext_table[i].content_type;
     }

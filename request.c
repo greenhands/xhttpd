@@ -4,9 +4,29 @@
 
 #include "request.h"
 
-// consume one line from connection buf
-// return: 0 when got line, otherwise the caller need to try again
-// TODO: should move this function to connection.c
+/*****************************************************/
+/******  below is util functions for request   *******/
+/*****************************************************/
+
+char* request_get_header(struct request *r, char *name) {
+    for (int i = 0; i < r->header_len; ++i) {
+        if (strequal(r->headers[i].key, name))
+            return r->headers[i].value;
+    }
+    return NULL;
+}
+
+/*****************************************************/
+/****** below is functions for request parsing *******/
+/*****************************************************/
+
+/**
+ * Consume one line from connection buff
+ * @param request r
+ * @param connection c
+ * @return 0 when got line, otherwise the caller need to try again
+ * TODO: should move this function to connection.c
+ */
 static int request_read_line(struct request *r, struct conn *c) {
     char ch;
     int buff_size = sizeof(r->line_buf) - 1;
@@ -19,7 +39,7 @@ static int request_read_line(struct request *r, struct conn *c) {
         }
 
         if (c->read_p == c->valid_p) {
-            if (conn_fulfill_buff(c) == -1) return -1;
+            if (conn_buff_fulfill(c) == -1) return -1;
         }
         if (ch == '\n') {
             buf[r->line_end++] = '\0';
@@ -34,15 +54,15 @@ static int request_read_line(struct request *r, struct conn *c) {
     return EAGAIN;
 }
 
-static void report_request(struct request *r) {
-    handle_http_request(r);
-}
-
-// discard empty line
-// return: 0 means empty lines end, and has more content
-//         -1 means something wrong in request data
-//         EAGAIN means data not ready, need to call it later (by io event automatically)
-// TODO: should move this function to connection.c
+/**
+ * Discard empty line in request
+ * @param r
+ * @param c
+ * @return  0: means empty lines end, and has more content
+ *          -1: means something wrong in request data
+ *          EAGAIN: means data not ready, need to call it later (by io event automatically)
+ * TODO: should move this function to connection.c
+ */
 static int discard_empty_line(struct request *r, struct conn *c) {
     while (c->read_p < c->valid_p) {
         char ch = c->r_buf[c->read_p];
@@ -63,12 +83,20 @@ static int discard_empty_line(struct request *r, struct conn *c) {
 
         // ensure we have buff space on next read, or we are listening on read event
         if (c->read_p == c->valid_p) {
-            if (conn_fulfill_buff(c) == -1) return -1;
+            if (conn_buff_fulfill(c) == -1) return -1;
         }
     }
     return EAGAIN;
 }
 
+/**
+ * Read body content from connection buff up to content-length
+ * @param request r
+ * @param connection c
+ * @return  0: finish read all body
+ *          -1: error occurs when read fd, close conneciton
+ *          EAGAIN: body is not prepared, waiting for read event
+ */
 static int read_body_from_buff(struct request *r, struct conn *c) {
     while (c->read_p < c->valid_p) {
         int body_len = r->content_len - r->body_end;
@@ -81,13 +109,38 @@ static int read_body_from_buff(struct request *r, struct conn *c) {
         }else {
             memmove(r->request_body+r->body_end, c->r_buf+c->read_p, buf_len);
             r->body_end += buf_len;
-            if (conn_fulfill_buff(c) == -1)
+            if (conn_buff_fulfill(c) == -1)
                 return -1;
             if (r->body_end == r->content_len)
                 return 0;
         }
     }
     return EAGAIN;
+}
+
+/**
+ * Determine whether a connection is persistent,
+ * following the rules in frc7230 section 6.3
+ * @param request r
+ * @return 1: is persistent; 0: is not persistent
+ */
+static int request_is_persistent_connection(struct request *r) {
+    char *connection = request_get_header(r, "Connection");
+    int is_http_1_1 = strequal(r->version, HTTP_VER_1_1);
+    if (connection == NULL)
+        return is_http_1_1;
+    if (strequal(connection, "close"))
+        return 0;
+    if (is_http_1_1 || strequal(connection, "keep-alive"))
+        return 1;
+    return 0;
+}
+
+static void report_request(struct request *r) {
+    r->keep_alive = request_is_persistent_connection(r);
+    log_debugf(__func__ , "keep-alive: %s", r->keep_alive?"true":"false");
+
+    handle_http_request(r);
 }
 
 static void after_read_request_body(struct request *r, struct conn *c) {
@@ -254,7 +307,7 @@ static int parse_request_line(struct request *r) {
         r->status_code = HTTP_BAD_REQUEST;
         return -1;
     }
-    if (!strequal(token, HTTP_VER)) {
+    if (!strequal(token, HTTP_VER_1_1) && !strequal(token, HTTP_VER_1_0)) {
         r->status_code = HTTP_BAD_REQUEST;
         return -1;
     }

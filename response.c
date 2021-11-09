@@ -3,14 +3,44 @@
 //
 #include "response.h"
 
-static void finish_write_response(struct conn *c) {
-    log_debug(__func__ );
+/*****************************************************/
+/******  below is util functions for response  *******/
+/*****************************************************/
 
-    struct request *r = c->data;
-    if (conn_buff_flush(c) != 0)
+void response_set_header(struct request *r, char *name, char *value) {
+    // if existed, replace
+    for (int i = 0; i < r->res_header_len; ++i) {
+        if (strequal(r->res_headers[i].key, name)) {
+            r->res_headers[i].value = copy_string(r->res_headers[i].value, value);
+            return;
+        }
+    }
+    if (r->res_header_len == HEADER_SIZE)
         return;
 
-    conn_close(c);
+    struct header *h = &r->res_headers[r->res_header_len++];
+    h->key = alloc_copy_string(name);
+    h->value = alloc_copy_string(value);
+}
+
+char* response_get_header(struct request *r, char *name) {
+    for (int i = 0; i < r->res_header_len; ++i) {
+        if (strequal(r->res_headers[i].key, name))
+            return r->res_headers[i].value;
+    }
+    return NULL;
+}
+
+/*****************************************************/
+/****** below is functions for sending response ******/
+/*****************************************************/
+
+static void finish_response(struct request *r) {
+    if (r->keep_alive) {
+        conn_keepalive(r->c);
+    } else {
+        conn_close(r->c);
+    }
 }
 
 static void send_response_file(struct conn *c) {
@@ -25,7 +55,17 @@ static void send_response_file(struct conn *c) {
     if (ret == -1 || (ret == EAGAIN && r->fs.seek < r->res_body_len))
         return;
 
-    conn_close(c);
+    finish_response(r);
+}
+
+static void flush_response_body(struct conn *c) {
+    log_debug(__func__ );
+
+    struct request *r = c->data;
+    if (conn_buff_flush(c) != 0)
+        return;
+
+    finish_response(r);
 }
 
 static void write_response_body(struct conn *c) {
@@ -43,8 +83,8 @@ static void write_response_body(struct conn *c) {
         }
     }
 
-    c->write_callback = finish_write_response;
-    finish_write_response(c);
+    c->write_callback = flush_response_body;
+    flush_response_body(c);
 }
 
 static void write_response_headers(struct conn *c) {
@@ -76,7 +116,7 @@ static void write_response_line(struct conn *c) {
     log_debug(__func__ );
 
     struct request *r = c->data;
-    snprintf(r->line_buf, LINE_SIZE, "%s %s\r\n", HTTP_VER, status_text(r->status_code));
+    snprintf(r->line_buf, LINE_SIZE, "%s %s\r\n", HTTP_VER_1_1, status_text(r->status_code));
     if (conn_buff_append_line(c, r->line_buf, strlen(r->line_buf)) != 0)
         return;
 
@@ -84,24 +124,34 @@ static void write_response_line(struct conn *c) {
     write_response_headers(c);
 }
 
-static void set_common_response_header(struct request *r) {
+static int response_need_content_length(struct request *r) {
+    if (r->status_code >= 200 && r->method != HTTP_HEAD &&
+        r->status_code != HTTP_NO_CONTENT &&
+        r->status_code != HTTP_NOT_MODIFIED) {
+        return 1;
+    }
+    return 0;
+}
+
+static void response_set_common_headers(struct request *r) {
     response_set_header(r, "Server", "xHttp/1.0");
 }
 
-void response_set_header(struct request *r, char *name, char *value) {
-    if (r->res_header_len == HEADER_SIZE)
-        return;
+static void response_set_content_headers(struct request *r) {
+    if (response_need_content_length(r))
+        response_set_header(r, "Content-Length", int_to_string(r->res_body_len));
+    response_set_header(r, "X-Content-Type-Options", "nosniff");
+}
 
-    struct header *h = &r->res_headers[r->res_header_len++];
-    h->key = alloc_copy_string(name);
-    h->value = alloc_copy_string(value);
+static void response_set_connection_headers(struct request *r) {
+    response_set_header(r, "Connection", r->keep_alive?"keep-alive":"close");
 }
 
 void response(struct request *r) {
     // set headers
-    set_common_response_header(r);
-    if (r->status_code >= 200 && r->status_code != HTTP_NO_CONTENT)
-        response_set_header(r, "Content-Length", int_to_string(r->res_body_len));
+    response_set_common_headers(r);
+    response_set_content_headers(r);
+    response_set_connection_headers(r);
 
     // close read callback
     r->c->read_callback = NULL;

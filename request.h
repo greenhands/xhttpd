@@ -45,6 +45,7 @@ struct request {
     int content_len;
     int body_end;
     char *request_body;
+    int keep_alive;
 
     // below is response contents
     int status_code;
@@ -59,6 +60,8 @@ struct request {
 
 void request_new(struct conn *c);
 void request_free(struct request *r);
+
+char* request_get_header(struct request *r, char *name);
 
 extern void handle_http_request(struct request *r);
 

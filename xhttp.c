@@ -17,6 +17,8 @@ static int xhttp_create_bind_socket(const char *addr, int port){
 
     if (setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on)) < 0)
         log_error(strerror(errno));
+    if (setsockopt(listen_fd, SOL_SOCKET, SO_KEEPALIVE, &on, sizeof(on)) < 0)
+        log_error(strerror(errno));
     if (bind(listen_fd, (struct sockaddr *)&address, sizeof(address)) < 0)
         log_error(strerror(errno));
 
@@ -50,10 +52,6 @@ void xhttp_start(struct xhttp *http) {
     }
 }
 
-static void xhttp_send_file(struct request *r, char *filename) {
-
-}
-
 static void xhttp_handle_get(struct request *r) {
     char filename[FILENAME_MAX];
     snprintf(filename, FILENAME_MAX, "%s%s", DOC_ROOT, r->path);
@@ -74,7 +72,8 @@ static void xhttp_handle_post(struct request *r) {
 }
 
 void handle_http_request(struct request *r) {
-    log_debugf(__func__ , "handle method: %d url: %s", r->method, r->uri);
+    log_infof(NULL , "receive http request from %s:%d, method: %s, url: %s, body: %s", r->c->remote, r->c->port,
+              method_text(r->method), r->uri, r->request_body?r->request_body:"(empty)");
 
     switch (r->method) {
         case HTTP_GET:

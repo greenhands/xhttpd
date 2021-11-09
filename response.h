@@ -16,6 +16,7 @@
 struct request;
 
 void response_set_header(struct request *r, char *name, char *value);
+char* response_get_header(struct request *r, char *name);
 
 void response(struct request *r);
 void response_error(struct request *r, int code);

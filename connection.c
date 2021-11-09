@@ -126,7 +126,6 @@ void conn_listen(struct conn *c, int events) {
     event_add(c->ev, c->fd, events, handle_read_write);
 }
 
-// TODO: important, waiting to complete
 void conn_close(struct conn *c) {
     log_infof(__func__ ,"fd: %d close connection by server", c->fd);
 
@@ -139,6 +138,27 @@ void conn_close(struct conn *c) {
     conn_free(c);
 }
 
+void conn_keepalive(struct conn *c) {
+    log_infof(__func__ , "fd: %d keep alive connection", c->fd);
+
+    int fd = c->fd;
+    struct event *ev = c->ev;
+
+    event_del(c->ev, c->fd, EVENT_READ|EVENT_WRITE);
+    if (c->close_callback)
+        c->close_callback(c);
+    conn_free(c);
+
+    c->fd = fd;
+    event_add(ev, fd, EVENT_READ, handle_read_write);
+    if (ev->on_connection)
+        ev->on_connection(c);
+}
+
+/**
+ * Used by conn_close and conn_keepalive,
+ * be careful to modify this function
+ */
 void conn_free(struct conn *c) {
     c->fd = -1;
     c->valid_p = 0;
@@ -146,13 +166,16 @@ void conn_free(struct conn *c) {
     c->w_len = 0;
     c->w_write = 0;
 
+    c->data = NULL;
     c->read_callback = NULL;
     c->write_callback = NULL;
     c->close_callback = NULL;
 }
 
-// empty buff and read from socket
-int conn_fulfill_buff(struct conn *c) {
+/**
+ * empty buff and read from socket as much as it can
+ */
+int conn_buff_fulfill(struct conn *c) {
     c->valid_p = c->read_p = 0;
     int ret = copy_socket_buff(c);
     if (ret == -1)
@@ -160,8 +183,10 @@ int conn_fulfill_buff(struct conn *c) {
     return 0;
 }
 
-// return size of actual appended buff
-//        -1 when error occurs
+/**
+ * @return   size of actual appended buff,
+ *          -1 when error occurs
+ */
 int conn_buff_append_data(struct conn *c, char *buf, int size) {
     if (c->w_write == c->w_len)
         c->w_write = c->w_len = 0;
@@ -189,10 +214,15 @@ int conn_buff_append_data(struct conn *c, char *buf, int size) {
     return size;
 }
 
-// append line which can not be truncated
-// return   0 append success
-//          -1 line size too large or error
-//          EAGAIN currently has no space for line
+/**
+ * Append line which can not be truncated
+ * @param c connection
+ * @param buf buff
+ * @param size buff size
+ * @return  0: append success
+ *          -1: line size too large or error
+ *          EAGAIN: currently has no space for line
+ */
 int conn_buff_append_line(struct conn *c, char *buf, int size) {
     if (c->w_write == c->w_len)
         c->w_write = c->w_len = 0;
@@ -213,10 +243,14 @@ int conn_buff_append_line(struct conn *c, char *buf, int size) {
     return 0;
 }
 
-// send file to socket use sendfile()
-// return   0 finish
-//          -1 error occurs and close connection
-//          EAGAIN to be continued
+/**
+ * Send file to socket use sendfile()
+ * @param f file_sender hold the file descriptor
+ * @param c connection
+ * @return  0: finish
+ *          -1: error occurs and close connection
+ *          EAGAIN: to be continued
+ */
 int conn_send_file(struct file_sender *f, struct conn *c) {
     int ret = sendfile(f->fd, c->fd, f->seek, &f->len, NULL, 0);
     if (ret == -1) {
