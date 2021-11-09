@@ -8,6 +8,7 @@
 // when add new code should change function @status_text together
 enum http_code {
     HTTP_OK                 = 200,
+    HTTP_NO_CONTENT         = 204,
     HTTP_BAD_REQUEST        = 401,
     HTTP_NOT_FOUND          = 404,
     HTTP_METHOD_NOT_ALLOW   = 405, // should return allowed methods

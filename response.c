@@ -85,7 +85,7 @@ static void write_response_line(struct conn *c) {
 }
 
 static void set_common_response_header(struct request *r) {
-    response_set_header(r, "Server", "XHttp");
+    response_set_header(r, "Server", "xHttp/1.0");
 }
 
 void response_set_header(struct request *r, char *name, char *value) {
@@ -98,7 +98,10 @@ void response_set_header(struct request *r, char *name, char *value) {
 }
 
 void response(struct request *r) {
+    // set headers
     set_common_response_header(r);
+    if (r->status_code >= 200 && r->status_code != HTTP_NO_CONTENT)
+        response_set_header(r, "Content-Length", int_to_string(r->res_body_len));
 
     // close read callback
     r->c->read_callback = NULL;
@@ -118,12 +121,11 @@ void response_body(struct request *r, char *body, int body_len) {
         r->response_body = alloc_copy_nstring(body, body_len);
         r->res_body_len = body_len;
     }
-    response_set_header(r, "Content-Length", int_to_string(body_len));
     response(r);
 }
 
 void response_file(struct request *r, char *filename, struct stat st) {
-    log_debugf(__func__ , "file: %s", filename);
+    log_debugf(__func__ , "response file: %s", filename);
 
     char *ext = strrchr(filename, '.');
     response_set_header(r, "Content-Type", ext_to_content_type(ext));
@@ -131,7 +133,6 @@ void response_file(struct request *r, char *filename, struct stat st) {
         response(r);
         return;
     }
-    response_set_header(r, "Content-Length", int_to_string(st.st_size));
     int fd = open(filename, O_RDONLY|O_NONBLOCK);
     if (fd == -1) {
         log_warn(strerror(errno));
