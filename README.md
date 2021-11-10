@@ -8,12 +8,12 @@
 - [ ] POST
 - [x] 静态文件服务器
 - [x] 支持keep-alive
-- [ ] cgi
-- [ ] deamon模式
+- [ ] demon模式
 - [ ] 日志文件
 - [ ] 接收信号
 - [ ] 定时器
 - [ ] 请求超时机制
+- [ ] FastCGI
 - [ ] 多线程、线程池
 
 ### 优化
@@ -21,3 +21,4 @@
 
 ### 功能
 - [ ] 支持POST application/x-www-form-urlencoded
+- [ ] 支持一种内容压缩编码格式（gzip、br）
