@@ -125,7 +125,7 @@ static int read_body_from_buff(struct request *r, struct conn *c) {
  * @return 1: is persistent; 0: is not persistent
  */
 static int request_is_persistent_connection(struct request *r) {
-    char *connection = request_get_header(r, "Connection");
+    char *connection = request_get_header(r, HEADER_CONNECTION);
     int is_http_1_1 = strequal(r->version, HTTP_VER_1_1);
     if (connection == NULL)
         return is_http_1_1;

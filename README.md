@@ -5,7 +5,7 @@
 
 ### Todo
 - [x] GET
-- [ ] POST
+- [x] POST
 - [x] 静态文件服务器
 - [x] 支持keep-alive
 - [ ] demon模式

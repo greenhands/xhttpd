@@ -144,7 +144,7 @@ static void response_set_content_headers(struct request *r) {
 }
 
 static void response_set_connection_headers(struct request *r) {
-    response_set_header(r, "Connection", r->keep_alive?"keep-alive":"close");
+    response_set_header(r, HEADER_CONNECTION, r->keep_alive?"keep-alive":"close");
 }
 
 void response(struct request *r) {
@@ -159,9 +159,10 @@ void response(struct request *r) {
     conn_listen(r->c, EVENT_WRITE);
 }
 
-void response_error(struct request *r, int code) {
+void response_error(struct request *r, int code, char *msg) {
     r->status_code = code;
-    response(r);
+    response_set_header(r, HEADER_CONTENT_TYPE, "text/plain");
+    response_body(r, msg, strlen(msg));
 }
 
 void response_body(struct request *r, char *body, int body_len) {
@@ -178,7 +179,7 @@ void response_file(struct request *r, char *filename, struct stat st) {
     log_debugf(__func__ , "response file: %s", filename);
 
     char *ext = strrchr(filename, '.');
-    response_set_header(r, "Content-Type", ext_to_content_type(ext));
+    response_set_header(r, HEADER_CONTENT_TYPE, ext_to_content_type(ext));
     if (st.st_size == 0) {
         response(r);
         return;

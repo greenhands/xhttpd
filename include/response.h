@@ -19,7 +19,7 @@ void response_set_header(struct request *r, char *name, char *value);
 char* response_get_header(struct request *r, char *name);
 
 void response(struct request *r);
-void response_error(struct request *r, int code);
+void response_error(struct request *r, int code, char *msg);
 void response_body(struct request *r, char *body, int body_len);
 void response_file(struct request *r, char *filename, struct stat st);
 

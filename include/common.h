@@ -24,4 +24,7 @@
 
 #define EMPTY_CHAR      " \t"
 
+#define HEADER_CONTENT_TYPE     "Content-Type"
+#define HEADER_CONNECTION       "Connection"
+
 #endif //XHTTPD_COMMON_H

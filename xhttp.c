@@ -46,13 +46,50 @@ void xhttp_init(struct xhttp *http) {
     // TODO: set http handler
 }
 
+static struct handler* xhttp_get_handler(struct xhttp *http, char *pattern) {
+    for (int i = 0; i < http->handle_size; ++i) {
+        if (strequal(http->handlers[i].pattern, pattern))
+            return &http->handlers[i];
+    }
+    return NULL;
+}
+
+void xhttp_set_handler(struct xhttp *http, char *pattern, http_handler f) {
+    if (!pattern || !f)
+        log_error("empty http handler pattern or function");
+
+    if (http->handle_size == N_HANDLER)
+        return;
+
+    struct handler *h = xhttp_get_handler(http, pattern);
+    if (h) {
+        h->func = f;
+        log_warnf(NULL, "overwrite http handler: %s", pattern);
+        return;
+    }
+    h = &http->handlers[http->handle_size++];
+    h->pattern = pattern;
+    h->func = f;
+}
+
 void xhttp_start(struct xhttp *http) {
     while (1) {
         event_dispatch(http->ev);
     }
 }
 
+static int xhttp_dispatch_handler(struct xhttp *http, struct request *r) {
+    struct handler *h = xhttp_get_handler(http, r->path);
+    if (!h)
+        return -1;
+    h->func(r);
+    return 0;
+}
+
 static void xhttp_handle_get(struct request *r) {
+    int ret = xhttp_dispatch_handler(r->http, r);
+    if (ret == 0)
+        return;
     char filename[FILENAME_MAX];
     snprintf(filename, FILENAME_MAX, "%s%s", DOC_ROOT, r->path);
     if (r->path[strlen(r->path)-1] == '/') {
@@ -63,12 +100,15 @@ static void xhttp_handle_get(struct request *r) {
 
     struct stat st;
     if (stat(filename, &st) == -1)
-        return response_error(r, HTTP_NOT_FOUND);
+        return response_error(r, HTTP_NOT_FOUND, "404 NOT FOUND");
     response_file(r, filename, st);
 }
 
 static void xhttp_handle_post(struct request *r) {
-    response_error(r, HTTP_METHOD_NOT_ALLOW);
+    int ret = xhttp_dispatch_handler(r->http, r);
+    if (ret == 0)
+        return;
+    response_error(r, HTTP_NOT_FOUND, "404 NOT FOUND");
 }
 
 void handle_http_request(struct request *r) {
