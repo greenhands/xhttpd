@@ -48,6 +48,7 @@ struct request {
     int keep_alive;
 
     // below is response contents
+    int sent;
     int status_code;
     struct header res_headers[HEADER_SIZE];
     int res_header_len;

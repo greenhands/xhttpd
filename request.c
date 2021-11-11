@@ -269,6 +269,8 @@ static void parse_request_uri(struct request *r) {
         return;
 
     uri += n_path+1;
+    if (*uri == '\0')
+        return;
     int n_query = strcspn(uri, "#");
     r->query = alloc_copy_nstring(uri, n_query);
     log_debugf(__func__, "[query] %s", r->query);
@@ -387,8 +389,9 @@ void request_new(struct conn *c) {
     r->res_body_len = 0;
     r->res_body_curr = 0;
     r->fs.seek = 0;
-
+    r->sent = 0;
     r->status_code = HTTP_OK;
+
 
     c->data = (void*)r;
     c->read_callback = get_request_line;

@@ -1,6 +1,7 @@
 #include <stdio.h>
 
 #include "xhttp.h"
+#include "handler.h"
 
 static int xhttp_create_bind_socket(const char *addr, int port){
     int on = 1;
@@ -39,6 +40,9 @@ void xhttp_init(struct xhttp *http) {
 
     http->req_size = N_REQUEST;
     http->reqs = mem_calloc(http->req_size, sizeof(struct request));
+
+    http->handle_size = 0;
+    http->handlers = mem_calloc(N_HANDLER, sizeof(struct handler));
 
     int httpd = xhttp_create_bind_socket("127.0.0.1", XHTTP_LISTEN_PORT);
     event_add(http->ev, httpd, EVENT_READ, handle_connection);
@@ -86,48 +90,53 @@ static int xhttp_dispatch_handler(struct xhttp *http, struct request *r) {
     return 0;
 }
 
-static void xhttp_handle_get(struct request *r) {
-    int ret = xhttp_dispatch_handler(r->http, r);
-    if (ret == 0)
-        return;
+static int xhttp_handle_resource(struct request *r) {
     char filename[FILENAME_MAX];
     snprintf(filename, FILENAME_MAX, "%s%s", DOC_ROOT, r->path);
     if (r->path[strlen(r->path)-1] == '/') {
         int file_len = strlen(filename);
         snprintf(filename+file_len, FILENAME_MAX-file_len, DOC_INDEX);
     }
-    log_debugf(__func__ , "GET %s", filename);
 
     struct stat st;
-    if (stat(filename, &st) == -1)
-        return response_error(r, HTTP_NOT_FOUND, "404 NOT FOUND");
+    if (stat(filename, &st) == -1) {
+        if (errno != ENOENT) { // error except file not exist should report error
+            log_warnf(__func__ , "stat file: %s error: %s", filename, strerror(errno));
+            response_error(r, HTTP_INTERNAL_ERROR, "internal server error");
+            return 0;
+        } else {
+            return EAGAIN;
+        }
+    }
+
     response_file(r, filename, st);
+    return 0;
 }
 
-static void xhttp_handle_post(struct request *r) {
-    int ret = xhttp_dispatch_handler(r->http, r);
-    if (ret == 0)
-        return;
-    response_error(r, HTTP_NOT_FOUND, "404 NOT FOUND");
+static void xhttp_excute_cgi(struct request *r) {
+    log_debugf(__func__ , "cgi path: %s", r->path);
+    response_error(r, HTTP_NOT_FOUND, "not found");
 }
 
 void handle_http_request(struct request *r) {
     log_infof(NULL , "receive http request from %s:%d, method: %s, url: %s, body: %s", r->c->remote, r->c->port,
               method_text(r->method), r->uri, r->request_body?r->request_body:"(empty)");
 
-    switch (r->method) {
-        case HTTP_GET:
-            xhttp_handle_get(r);
-            break;
-        case HTTP_POST:
-            xhttp_handle_post(r);
-            break;
+    int ret = xhttp_dispatch_handler(r->http, r);
+    if (ret == 0)
+        return;
+
+    if (r->method == HTTP_GET && !r->query) {
+        if (xhttp_handle_resource(r) == 0) return;
     }
+
+    xhttp_excute_cgi(r);
 }
 
 int main() {
     struct xhttp http;
     xhttp_init(&http);
+    xhttp_set_handler(&http, "/EchoQueryParams", echo_query_params);
     xhttp_start(&http);
 
     return 0;

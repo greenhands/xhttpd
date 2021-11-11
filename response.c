@@ -148,6 +148,11 @@ static void response_set_connection_headers(struct request *r) {
 }
 
 void response(struct request *r) {
+    if (r->sent) {
+        log_warn("request already sent response, attempt to send again");
+        return;
+    }
+    r->sent = 1;
     // set headers
     response_set_common_headers(r);
     response_set_content_headers(r);

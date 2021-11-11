@@ -39,7 +39,7 @@ struct xhttp {
     struct request *reqs;
     int req_size;
 
-    struct handler handlers[N_HANDLER];
+    struct handler *handlers;
     int handle_size;
 };
 
