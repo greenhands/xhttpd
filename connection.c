@@ -127,6 +127,9 @@ void conn_listen(struct conn *c, int events) {
 }
 
 void conn_close(struct conn *c) {
+    if (c->fd < 0) {
+        log_warnf(__func__, "something wrong, attempt to close connection twice");
+    }
     log_infof(__func__ ,"fd: %d close connection by server", c->fd);
 
     event_del(c->ev, c->fd, EVENT_READ|EVENT_WRITE);

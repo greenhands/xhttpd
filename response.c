@@ -152,6 +152,7 @@ void response(struct request *r) {
         log_warn("request already sent response, attempt to send again");
         return;
     }
+
     r->sent = 1;
     // set headers
     response_set_common_headers(r);
@@ -166,8 +167,12 @@ void response(struct request *r) {
 
 void response_error(struct request *r, int code, char *msg) {
     r->status_code = code;
-    response_set_header(r, HEADER_CONTENT_TYPE, "text/plain");
-    response_body(r, msg, strlen(msg));
+    if (msg) {
+        response_set_header(r, HEADER_CONTENT_TYPE, "text/plain");
+        response_body(r, msg, strlen(msg));
+    } else {
+        response(r);
+    }
 }
 
 void response_body(struct request *r, char *body, int body_len) {

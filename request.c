@@ -47,7 +47,7 @@ static int request_read_line(struct request *r, struct conn *c) {
         }
     }
     if (r->line_end == buff_size) {
-        conn_close(c);
+        response_error(r, HTTP_BAD_REQUEST, "header line too large");
         log_warn("request line is too long");
         return -1;
     }
@@ -70,7 +70,7 @@ static int discard_empty_line(struct request *r, struct conn *c) {
         if (ch != r->expect) {
             if (r->expect == '\r') return 0;
             else {
-                conn_close(c);
+                response_error(r, HTTP_BAD_REQUEST, "invalid empty line in request");
                 return -1;
             }
         }
@@ -147,8 +147,12 @@ static void after_read_request_body(struct request *r, struct conn *c) {
     // close read callback, but listen for socket close event
     c->read_callback = NULL;
     r->expect = '\r';
-    if (discard_empty_line(r, c) != EAGAIN) {
-        conn_close(c);
+    int ret = discard_empty_line(r, c);
+    if (ret == -1) {
+        return;
+    }
+    if (ret == 0) {
+        response_error(r, HTTP_BAD_REQUEST, "content-length is not correct");
         return;
     }
     report_request(r);
@@ -384,6 +388,8 @@ void request_new(struct conn *c) {
     r->header_len = 0;
     r->content_len = 0;
     r->body_end = 0;
+    r->keep_alive = 0;
+
     r->res_header_len = 0;
     r->res_header_curr = 0;
     r->res_body_len = 0;
@@ -391,7 +397,6 @@ void request_new(struct conn *c) {
     r->fs.seek = 0;
     r->sent = 0;
     r->status_code = HTTP_OK;
-
 
     c->data = (void*)r;
     c->read_callback = get_request_line;
