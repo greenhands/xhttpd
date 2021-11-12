@@ -4,6 +4,24 @@
 
 #include "error.h"
 
+static int fd;
+static FILE *fp;
+
+void log_init(const char *log_path) {
+    fd = open(log_path, O_WRONLY|O_NONBLOCK|O_APPEND|O_CREAT, 0644); /* must specify mode since we indicate the O_CREAT flag */
+    if (fd == -1)
+        log_errorf(NULL, "open(%s) failed: %s", log_path, strerror(errno));
+
+    fp = fdopen(fd, "a");
+    if (!fp) {
+        log_errorf(NULL, "fopen(%d) failed: %s", fd, strerror(errno));
+    }
+
+    if (dup2(fd, STDERR_FILENO) == -1) { /* redirect stderr to log file */
+        log_errorf(NULL, "dup STDERR_FILENO failed: %s", fd, strerror(errno));
+    }
+}
+
 void log_m_(int level, const char *msg){
     const char *level_str;
     switch (level) {

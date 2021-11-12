@@ -22,7 +22,9 @@
 
 #define DEBUG 1
 
-#define EMPTY_CHAR      " \t"
+#define LOG_PATH                "log/http.log"
+
+#define EMPTY_CHAR              " \t"
 
 #define HEADER_CONTENT_TYPE     "Content-Type"
 #define HEADER_CONNECTION       "Connection"

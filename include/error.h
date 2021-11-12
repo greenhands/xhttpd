@@ -17,6 +17,7 @@
 
 #define LOG_BUF_LEN 1024
 
+void log_init(const char *log_path);
 void log_debugf(const char *msg, const char *fmt, ...);
 void log_infof(const char *msg, const char *fmt, ...);
 void log_warnf(const char *msg, const char *fmt, ...);

@@ -132,8 +132,43 @@ void handle_http_request(struct request *r) {
 
     xhttp_excute_cgi(r);
 }
+static void xhttp_daemon() {
+    switch (fork()) {
+        case -1:
+            log_error("fork() failed");
+            break;
+        case 0: /* child */
+            break;
+        default: /* parent */
+            exit(0);
+    }
+
+    if (setsid() == -1) /* set process group id and session id */
+        log_error("setsid() failed");
+
+    umask(0); /* set file mode mask */
+
+    int fd = open("/dev/null", O_RDWR);
+    if (fd == -1)
+        log_error("open /dev/null failed");
+
+    if (dup2(fd, STDIN_FILENO) == -1) /* redirect stdin to /dev/null */
+        log_error("dup stdin failed");
+
+    if (dup2(fd, STDOUT_FILENO) == -1) /* redirect stdout to /dev/null */
+        log_error("dup stdout failed");
+
+    if (fd > STDERR_FILENO) { /* no need to keep this fd */
+        if (close(fd) == -1)
+            log_error("close fd /dev/null failed");
+    }
+    log_info("http server is running in background");
+}
 
 int main() {
+    xhttp_daemon();
+    log_init(LOG_PATH);
+
     struct xhttp http;
     xhttp_init(&http);
     xhttp_set_handler(&http, "/EchoQueryParams", echo_query_params);
