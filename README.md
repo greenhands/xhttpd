@@ -3,6 +3,8 @@
 
 主要参考了[Tinyhttpd](https://github.com/EZLippi/Tinyhttpd)、[libevent](https://github.com/libevent/libevent)、[nginx](https://github.com/nginx/nginx)以及[《linux高性能服务器编程》](https://book.douban.com/subject/24722611/)。
 
+开发环境为MacOS，因此采用Kqueue作为IO复用机制。
+
 ### Todo
 - [x] GET
 - [x] POST

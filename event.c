@@ -6,7 +6,10 @@
 #include "error.h"
 #include "memory.h"
 
-void ensure_events_capacity(struct event *ev) {
+static int signals[] = {SIGTERM, SIGINT, SIGHUP, SIGQUIT, SIGALRM, SIGCHLD, -1};
+static int pipefd[2];
+
+static void ensure_events_capacity(struct event *ev) {
     if (ev->event_size < ev->n_changes) {
         while (ev->event_size < ev->n_changes)
             ev->event_size *= 2;
@@ -16,17 +19,49 @@ void ensure_events_capacity(struct event *ev) {
     }
 }
 
+static void handle_signal_event(struct event *ev, struct kevent *kev, int events) {
+    log_debugf(__func__ , "signal received, fd: %d", kev->ident);
+}
+
+static void event_signal_handler(int sig) {
+    int save_errno = errno;
+    int msg = sig;
+    send(pipefd[0], (char *)&msg, 1, 0);
+    errno = save_errno;
+}
+
+static void event_init_pipe(struct event *ev) {
+    if (socketpair(PF_UNIX, SOCK_STREAM, 0, pipefd) == -1)
+        log_errorf(NULL, "call socketpair() failed: %s", strerror(errno));
+
+    set_nonblocking(pipefd[0]);
+    set_nonblocking(pipefd[1]);
+
+    event_add(ev, pipefd[1], EVENT_READ, handle_signal_event);
+}
+
+static void event_init_signals(struct event *ev) {
+    signal(SIGPIPE, SIG_IGN); // ignore SIGPIPE to prevent from crash on sending to a closed socket
+
+    struct sigaction sa;
+    for (int *sig = signals; *sig > 0 ; sig++) {
+        memset(&sa, 0, sizeof(struct sigaction));
+
+        sa.sa_flags |= SA_RESTART;
+        sa.sa_handler = event_signal_handler;
+        sigemptyset(&sa.sa_mask);
+
+        if (sigaction(*sig, &sa, NULL) == -1)
+            log_errorf(NULL, "call sigaction(%d) failed", *sig);
+    }
+}
+
 struct event* event_init(){
     int kq;
-    struct event *ev = NULL;
-
-    // TODO: more signals support
-    signal(SIGPIPE, SIG_IGN); // ignore SIGPIPE to prevent from crash on sending to a closed socket
+    struct event *ev = (struct event*)mem_calloc(1, sizeof(struct event));
 
     if ((kq=kqueue()) == -1)
         log_error(strerror(errno));
-
-    ev = (struct event*)mem_calloc(1, sizeof(struct event));
     ev->kqfd = kq;
 
     ev->address_len = sizeof(struct sockaddr_in);
@@ -43,6 +78,9 @@ struct event* event_init(){
     for (int i = 0; i < ev->conn_size; ++i) {
         ev->connections[i] = &ptr[i];
     }
+
+    event_init_pipe(ev);
+    event_init_signals(ev);
 
     return ev;
 }
@@ -215,6 +253,10 @@ void event_del(struct event *ev, int fd, int events){
 
 void set_connect_cb(struct event *ev, void (*cb) (struct conn *c)) {
     ev->on_connection = cb;
+}
+
+void set_exit_cb(struct event *ev, void (*cb) (struct xhttp *http)) {
+    ev->on_exit = cb;
 }
 
 struct conn* event_get_free_connection(struct event *ev, int fd){

@@ -49,6 +49,7 @@ struct event {
     socklen_t address_len;
 
     void (*on_connection) (struct conn *c);
+    void (*on_exit) (struct xhttp *http);
 };
 
 struct event* event_init();
@@ -59,6 +60,7 @@ void event_dealloc(struct event *ev);
 int event_close_fd(struct event *ev, int fd);
 
 void set_connect_cb(struct event *ev, void (*cb) (struct conn *c));
+void set_exit_cb(struct event *ev, void (*cb) (struct xhttp *http));
 
 struct conn* event_get_free_connection(struct event *ev, int fd);
 struct conn* event_find_connection(struct event *ev, int fd);

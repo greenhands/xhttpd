@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <signal.h>
 #include <sys/time.h>
 #include <sys/event.h>
 #include <sys/types.h>

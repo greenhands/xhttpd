@@ -30,9 +30,14 @@ static int xhttp_create_bind_socket(const char *addr, int port){
     return listen_fd;
 }
 
+static void xhttp_exit(struct xhttp *http) {
+
+}
+
 void xhttp_init(struct xhttp *http) {
     struct event *ev = event_init();
     set_connect_cb(ev, request_new);
+    set_exit_cb(ev, xhttp_exit);
 
     http->ev = ev;
     ev->http = http;
@@ -46,8 +51,6 @@ void xhttp_init(struct xhttp *http) {
 
     int httpd = xhttp_create_bind_socket("127.0.0.1", XHTTP_LISTEN_PORT);
     event_add(http->ev, httpd, EVENT_READ, handle_connection);
-
-    // TODO: set http handler
 }
 
 static struct handler* xhttp_get_handler(struct xhttp *http, char *pattern) {
