@@ -31,7 +31,12 @@ static int xhttp_create_bind_socket(const char *addr, int port){
 }
 
 static void xhttp_exit(struct xhttp *http) {
-
+    for (int i = 0; i < http->req_size; ++i) {
+        if (http->reqs[i].c)
+            conn_close(http->reqs[i].c);
+    }
+    if (close(http->listen_fd) == -1)
+        log_warnf(NULL, "close listen fd failed: %s", strerror(errno));
 }
 
 void xhttp_init(struct xhttp *http) {
@@ -51,6 +56,7 @@ void xhttp_init(struct xhttp *http) {
 
     int httpd = xhttp_create_bind_socket("127.0.0.1", XHTTP_LISTEN_PORT);
     event_add(http->ev, httpd, EVENT_READ, handle_connection);
+    http->listen_fd = httpd;
 }
 
 static struct handler* xhttp_get_handler(struct xhttp *http, char *pattern) {
@@ -165,7 +171,7 @@ static void xhttp_daemon() {
         if (close(fd) == -1)
             log_error("close fd /dev/null failed");
     }
-    log_info("http server is running in background");
+    log_infof(NULL, "http server is running in background, pid: %d", getpid());
 }
 
 int main() {

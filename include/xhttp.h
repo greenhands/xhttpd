@@ -34,6 +34,7 @@ struct handler {
 
 struct xhttp {
     struct event *ev;
+    int listen_fd;
     int allowed_methods;
 
     struct request *reqs;

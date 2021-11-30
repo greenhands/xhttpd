@@ -8,6 +8,7 @@
 
 static int signals[] = {SIGTERM, SIGINT, SIGHUP, SIGQUIT, SIGALRM, SIGCHLD, -1};
 static int pipefd[2];
+static int is_quit;
 
 static void ensure_events_capacity(struct event *ev) {
     if (ev->event_size < ev->n_changes) {
@@ -20,13 +21,40 @@ static void ensure_events_capacity(struct event *ev) {
 }
 
 static void handle_signal_event(struct event *ev, struct kevent *kev, int events) {
-    log_debugf(__func__ , "signal received, fd: %d", kev->ident);
+    int fd = kev->ident;
+    log_debugf(__func__ , "signal received, fd: %d", fd);
+    char sigs[LINE_SIZE];
+    while (1) {
+        int n = recv(fd, sigs, LINE_SIZE, 0);
+        if (n == -1) {
+            if (errno == EWOULDBLOCK || errno == EAGAIN) {
+                event_add(ev, fd, EVENT_READ, handle_signal_event);
+                return;
+            }
+            else
+                log_errorf(NULL, "read signal pipe err: %s", strerror(errno));
+        }
+        if (n == 0)
+            log_error("signal pipe closed unexpected");
+        for (int i = 0; i < n; ++i) {
+            switch (sigs[i]) {
+                case SIGHUP:
+                case SIGCHLD:
+                case SIGALRM:
+                    break;
+                default:
+                    is_quit = 1;
+                    return;
+            }
+        }
+    }
 }
 
 static void event_signal_handler(int sig) {
     int save_errno = errno;
     int msg = sig;
-    send(pipefd[0], (char *)&msg, 1, 0);
+    if (send(pipefd[0], (char *)&msg, 1, 0) == -1)
+        log_warnf(__func__ , "send signal to pipe filed: %s", strerror(errno));
     errno = save_errno;
 }
 
@@ -34,9 +62,7 @@ static void event_init_pipe(struct event *ev) {
     if (socketpair(PF_UNIX, SOCK_STREAM, 0, pipefd) == -1)
         log_errorf(NULL, "call socketpair() failed: %s", strerror(errno));
 
-    set_nonblocking(pipefd[0]);
-    set_nonblocking(pipefd[1]);
-
+    set_nonblocking(pipefd[1]); /* receive signal, should be nonblock */
     event_add(ev, pipefd[1], EVENT_READ, handle_signal_event);
 }
 
@@ -85,7 +111,17 @@ struct event* event_init(){
     return ev;
 }
 
-void event_dispatch(struct event *ev){
+void event_quit(struct event *ev) {
+    log_info("start close server");
+    if (ev->on_exit)
+        ev->on_exit(ev->http);
+    if (close(ev->kqfd) == -1)
+        log_warnf(NULL, "closed kqueue fd failed: %s", strerror(errno));
+    log_info("server gracefully shutting down");
+    exit(0);
+}
+
+int event_dispatch(struct event *ev){
     struct timespec ts;
     ensure_events_capacity(ev);
 
@@ -96,11 +132,12 @@ void event_dispatch(struct event *ev){
     if (n == -1){
         if (errno != EINTR)
             log_error(strerror(errno));
-        //else system call interrupted by signal, ignore
-        return;
+        else /* system call interrupted by signal, and should ignore */
+            log_debug("kevent interrupted by signal");
+        return 0;
     }
     if (n == 0) // timeout
-        return;
+        return 0;
     for (int i = 0; i < n; ++i) {
         int events = 0;
         struct kevent kev = ev->events[i];
@@ -124,14 +161,15 @@ void event_dispatch(struct event *ev){
         }
     }
     ev->fd_close_len = 0;
-}
 
-void event_dealloc(struct event *ev){
-    //TODO: deallocate dynamic memory
+    if (is_quit) {
+        event_quit(ev);
+    }
+    return 0;
 }
 
 int event_close_fd(struct event *ev, int fd) {
-    if (ev->fd_close_len == N_FD_CLOSE)
+    if (ev->fd_close_len == N_FD_CLOSE || is_quit)
         return close(fd);
     else {
         ev->fd_close[ev->fd_close_len++] = fd;

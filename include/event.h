@@ -53,10 +53,9 @@ struct event {
 };
 
 struct event* event_init();
-void event_dispatch(struct event *ev);
+int event_dispatch(struct event *ev);
 void event_add(struct event *ev, int fd, int events, event_cb cb);
 void event_del(struct  event *ev, int fd, int events);
-void event_dealloc(struct event *ev);
 int event_close_fd(struct event *ev, int fd);
 
 void set_connect_cb(struct event *ev, void (*cb) (struct conn *c));
