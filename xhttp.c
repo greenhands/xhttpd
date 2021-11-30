@@ -174,6 +174,10 @@ static void xhttp_daemon() {
     log_infof(NULL, "http server is running in background, pid: %d", getpid());
 }
 
+static void timer_cb(void *data) {
+    log_debug("timer callback issued");
+}
+
 int main() {
     xhttp_daemon();
     log_init(LOG_PATH);
@@ -181,6 +185,7 @@ int main() {
     struct xhttp http;
     xhttp_init(&http);
     xhttp_set_handler(&http, "/EchoQueryParams", echo_query_params);
+    event_add_timer(http.ev, 3000, timer_cb, NULL);
     xhttp_start(&http);
 
     return 0;

@@ -8,6 +8,7 @@
 #include "xhttp.h"
 #include "common.h"
 #include "connection.h"
+#include "time_heap.h"
 
 #define EVENT_READ  0x0001
 #define EVENT_WRITE 0x0002
@@ -17,7 +18,12 @@
 #define N_FD_CLOSE      1024
 #define N_HASH          (2<<8)
 
+#define NANOSECOND  1
+#define MICROSECOND 1000
 #define MILLISECOND 1000000
+#define SECOND      1000000000
+
+time_msec_t curr_time_msec;
 
 typedef void (*event_cb) (struct event *ev, struct kevent *kev, int events);
 
@@ -31,6 +37,7 @@ struct event_change {
 
 struct event {
     struct xhttp *http;
+    struct timer_heap *heap;
 
     int kqfd;
     int n_changes;
@@ -55,7 +62,8 @@ struct event {
 struct event* event_init();
 int event_dispatch(struct event *ev);
 void event_add(struct event *ev, int fd, int events, event_cb cb);
-void event_del(struct  event *ev, int fd, int events);
+void event_del(struct event *ev, int fd, int events);
+void event_add_timer(struct event *ev, time_msec_t msec, timer_callback cb, void *data);
 int event_close_fd(struct event *ev, int fd);
 
 void set_connect_cb(struct event *ev, void (*cb) (struct conn *c));

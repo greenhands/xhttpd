@@ -6,7 +6,7 @@
 #include "error.h"
 #include "memory.h"
 
-static int signals[] = {SIGTERM, SIGINT, SIGHUP, SIGQUIT, SIGALRM, SIGCHLD, -1};
+static int signals[] = {SIGTERM, SIGINT, SIGHUP, SIGQUIT, SIGCHLD, -1};
 static int pipefd[2];
 static int is_quit;
 
@@ -40,7 +40,6 @@ static void handle_signal_event(struct event *ev, struct kevent *kev, int events
             switch (sigs[i]) {
                 case SIGHUP:
                 case SIGCHLD:
-                case SIGALRM:
                     break;
                 default:
                     is_quit = 1;
@@ -50,20 +49,20 @@ static void handle_signal_event(struct event *ev, struct kevent *kev, int events
     }
 }
 
-static void event_signal_handler(int sig) {
-    int save_errno = errno;
-    int msg = sig;
-    if (send(pipefd[0], (char *)&msg, 1, 0) == -1)
-        log_warnf(__func__ , "send signal to pipe filed: %s", strerror(errno));
-    errno = save_errno;
-}
-
 static void event_init_pipe(struct event *ev) {
     if (socketpair(PF_UNIX, SOCK_STREAM, 0, pipefd) == -1)
         log_errorf(NULL, "call socketpair() failed: %s", strerror(errno));
 
     set_nonblocking(pipefd[1]); /* receive signal, should be nonblock */
     event_add(ev, pipefd[1], EVENT_READ, handle_signal_event);
+}
+
+static void event_signal_handler(int sig) {
+    int save_errno = errno;
+    int msg = sig;
+    if (send(pipefd[0], (char *)&msg, 1, 0) == -1)
+        log_warnf(__func__ , "send signal to pipe filed: %s", strerror(errno));
+    errno = save_errno;
 }
 
 static void event_init_signals(struct event *ev) {
@@ -80,6 +79,28 @@ static void event_init_signals(struct event *ev) {
         if (sigaction(*sig, &sa, NULL) == -1)
             log_errorf(NULL, "call sigaction(%d) failed", *sig);
     }
+}
+
+// deprecated
+static void event_init_periodical_timer(struct event *ev) {
+    time_msec_t timer_resolution_msec = 100;
+
+    struct itimerval itv;
+    itv.it_interval.tv_sec = timer_resolution_msec / 1000;
+    itv.it_interval.tv_usec = (timer_resolution_msec % 1000) * 1000;
+    itv.it_value.tv_sec = timer_resolution_msec / 1000;
+    itv.it_value.tv_usec = (timer_resolution_msec % 1000) * 1000;
+    if (setitimer(ITIMER_REAL, &itv, NULL) == -1)
+        log_errorf(NULL, "call setitimer() failed: %s", strerror(errno));
+}
+
+void event_update_time(struct event *ev) {
+    struct timeval tv;
+    if (gettimeofday(&tv, NULL) == -1)
+        log_warnf(__func__ ,"call gettimeofday() failed, %s", strerror(errno));
+
+    curr_time_msec = tv.tv_sec * 1000 + tv.tv_usec / 1000;
+    log_debugf(__func__ , "update time in milliseconds: %ld", curr_time_msec);
 }
 
 struct event* event_init(){
@@ -108,6 +129,9 @@ struct event* event_init(){
     event_init_pipe(ev);
     event_init_signals(ev);
 
+    event_update_time(ev);
+    ev->heap = timer_heap_new();
+
     return ev;
 }
 
@@ -122,18 +146,33 @@ void event_quit(struct event *ev) {
 }
 
 int event_dispatch(struct event *ev){
-    struct timespec ts;
+    struct timespec ts, *pts;
     ensure_events_capacity(ev);
 
-    ts.tv_sec = 0;
-    ts.tv_nsec = 100 * MILLISECOND;
+    if (timer_size(ev->heap) > 0) {
+        time_msec_t mt = timer_min(ev->heap);
+        time_msec_t delta = mt - curr_time_msec;
+        log_debugf(__func__ , "set kevent() timeout: %ld ms", delta);
+
+        ts.tv_sec = delta / 1000;
+        ts.tv_nsec = (delta % 1000) * MILLISECOND;
+        pts = &ts;
+    } else {
+        log_debugf(__func__ , "set kevent() timeout NULL");
+        pts = NULL;
+    }
+
     int n = kevent(ev->kqfd, NULL, 0,
-                   ev->events, ev->event_size, &ts);
+                   ev->events, ev->event_size, pts);
+
+    event_update_time(ev);
+    expire_timers(ev->heap, curr_time_msec);
+
     if (n == -1){
         if (errno != EINTR)
-            log_error(strerror(errno));
+            log_errorf(NULL, "call kevent() failed: %s", strerror(errno));
         else /* system call interrupted by signal, and should ignore */
-            log_debug("kevent interrupted by signal");
+            log_debug("kevent() interrupted by signal");
         return 0;
     }
     if (n == 0) // timeout
@@ -287,6 +326,11 @@ void event_del(struct event *ev, int fd, int events){
         EV_SET(&chev[n++], fd, EVFILT_WRITE, op, 0, 0, NULL);
     }
     kevent(ev->kqfd, chev, n, NULL, 0, NULL);
+}
+
+void event_add_timer(struct event *ev, time_msec_t msec, timer_callback cb, void *data) {
+    time_msec_t expire = msec + curr_time_msec;
+    timer_add(ev->heap, expire, cb, data);
 }
 
 void set_connect_cb(struct event *ev, void (*cb) (struct conn *c)) {
