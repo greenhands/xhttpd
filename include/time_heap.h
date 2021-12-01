@@ -17,19 +17,21 @@ typedef void (*timer_callback) (void *data);
 
 struct timer_node {
     void *data;
+    int idx;
     time_msec_t expire_at;
     timer_callback cb;
 };
 
 struct timer_heap {
-    struct timer_node *nodes;
+    struct timer_node **nptrs;
     int size;
     int capacity;
 };
 
 struct timer_heap* timer_heap_new();
 int timer_size(struct timer_heap *heap);
-void timer_add(struct timer_heap *heap, time_msec_t expire_at, timer_callback cb, void *data);
+struct timer_node* timer_add(struct timer_heap *heap, time_msec_t expire_at, timer_callback cb, void *data);
+void timer_delete(struct timer_heap *heap, struct timer_node *node);
 time_msec_t timer_min(struct timer_heap *heap);
 void expire_timers(struct timer_heap *heap, time_msec_t curr_msec);
 

@@ -7,7 +7,7 @@
 void handle_read_write(struct event *ev, struct kevent *kev, int events) {
     struct conn *c = event_find_connection(ev, kev->ident);
     if (!c) {
-        log_infof(__func__ ,"fd: %d  event: %d ignore closed connection", kev->ident, events);
+        log_warnf(__func__ ,"fd: %d  event: %d ignore closed connection", kev->ident, events);
         event_del(ev, kev->ident, kev->filter);
         return;
     }
@@ -34,6 +34,23 @@ void handle_connection(struct event *ev, struct kevent *kev, int events){
         ev->on_connection(c);
 }
 
+void conn_add_timeout_cb(struct conn *c, time_msec_t msec, timer_callback cb) {
+    if (c->timer) {
+        log_warnf(__func__ , "error add repeated timer for connection");
+        return;
+    }
+    log_debugf(__func__ , "fd: %d add timeout callback", c->fd);
+    c->timer = event_add_timer(c->ev, msec, cb, (void *)c);
+}
+
+void conn_delete_timeout_cb(struct conn *c) {
+    if (c->timer) {
+        log_debugf(__func__ , "fd: %d delete timeout callback", c->fd);
+        event_delete_timer(c->ev, c->timer);
+        c->timer = NULL;
+    }
+}
+
 // copy data from socket buff until r_buf if full or data is empty
 // return:  0 fulfill the r_buf, and may have more data in socket buff
 //          -1 something wrong, need to close connection
@@ -43,7 +60,7 @@ static int copy_socket_buff(struct conn *c) {
     while(c->valid_p < sizeof(c->r_buf)) {
         int n = recv(c->fd, c->r_buf+c->valid_p, sizeof(c->r_buf) - c->valid_p, 0);
         if (n == 0) {
-            log_infof(__func__ ,"fd: %d connection close by remote", c->fd);
+            log_warnf(__func__ ,"fd: %d connection close by remote", c->fd);
             conn_close(c);
             return -1;
         }
@@ -53,7 +70,7 @@ static int copy_socket_buff(struct conn *c) {
                 return EAGAIN;
             }
             else {
-                log_warnf(strerror(errno), "error occurs when read from socket");
+                log_warnf(__func__ , "error occurs when read from socket: %s", strerror(errno));
                 conn_close(c);
                 return -1;
             }
@@ -116,7 +133,7 @@ struct conn* conn_new(struct event *ev, int fd){
     c->on_read = conn_read;
     c->on_write = conn_write;
 
-    log_infof(NULL, "new connection from %s:%d, create fd: %d", c->remote, c->port, fd);
+    log_infof(NULL , "new connection from %s:%d, create fd: %d", c->remote, c->port, fd);
 
     return c;
 }
@@ -130,7 +147,7 @@ void conn_close(struct conn *c) {
     if (c->fd < 0) {
         log_warnf(__func__, "something wrong, attempt to close connection twice");
     }
-    log_infof(__func__ ,"fd: %d close connection by server", c->fd);
+    log_infof(NULL ,"fd: %d close connection by server", c->fd);
 
     event_del(c->ev, c->fd, EVENT_READ|EVENT_WRITE);
     if (c->close_callback)
@@ -138,11 +155,12 @@ void conn_close(struct conn *c) {
     if (event_close_fd(c->ev, c->fd) < 0) {
         log_warnf(strerror(errno), "fd: %d error occurs when close connection %s", c->fd, c->remote);
     }
+    conn_delete_timeout_cb(c);
     conn_free(c);
 }
 
 void conn_keepalive(struct conn *c) {
-    log_infof(__func__ , "fd: %d keep alive connection", c->fd);
+    log_infof(NULL , "fd: %d keep alive connection", c->fd);
 
     int fd = c->fd;
     struct event *ev = c->ev;
@@ -150,6 +168,7 @@ void conn_keepalive(struct conn *c) {
     event_del(c->ev, c->fd, EVENT_READ|EVENT_WRITE);
     if (c->close_callback)
         c->close_callback(c);
+    conn_delete_timeout_cb(c);
     conn_free(c);
 
     c->fd = fd;

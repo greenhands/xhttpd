@@ -12,6 +12,8 @@
 
 #define LINE_SIZE       1024
 #define HEADER_SIZE     128
+#define TIMEOUT         5000 /* 5s */
+
 
 struct header {
     char *key;

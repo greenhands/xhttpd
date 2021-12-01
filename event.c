@@ -328,9 +328,13 @@ void event_del(struct event *ev, int fd, int events){
     kevent(ev->kqfd, chev, n, NULL, 0, NULL);
 }
 
-void event_add_timer(struct event *ev, time_msec_t msec, timer_callback cb, void *data) {
+struct timer_node* event_add_timer(struct event *ev, time_msec_t msec, timer_callback cb, void *data) {
     time_msec_t expire = msec + curr_time_msec;
-    timer_add(ev->heap, expire, cb, data);
+    return timer_add(ev->heap, expire, cb, data);
+}
+
+void event_delete_timer(struct event *ev, struct timer_node *timer) {
+    timer_delete(ev->heap, timer);
 }
 
 void set_connect_cb(struct event *ev, void (*cb) (struct conn *c)) {

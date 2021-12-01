@@ -140,6 +140,7 @@ static void report_request(struct request *r) {
     r->keep_alive = request_is_persistent_connection(r);
     log_debugf(__func__ , "keep-alive: %s", r->keep_alive?"true":"false");
 
+    conn_delete_timeout_cb(r->c);
     handle_http_request(r);
 }
 
@@ -326,6 +327,15 @@ static int parse_request_line(struct request *r) {
     return 0;
 }
 
+static void request_timeout(void *data) {
+    struct conn *c = data;
+    c->timer = NULL;
+    log_debugf(__func__ , "fd: %d request timeout", c->fd);
+
+    struct request *r = c->data;
+    response_error(r, HTTP_REQUEST_TIMEOUT, "request timeout in 5s");
+}
+
 // read_callback
 static void get_request_line(struct conn *c) {
     struct request *r = c->data;
@@ -350,6 +360,13 @@ static void get_request_line(struct conn *c) {
     r->line_end = 0; // empty line buff for next read
     c->read_callback = get_request_headers; // next to read request headers
     get_request_headers(c);
+}
+
+// read_callback
+static void on_start_request(struct conn *c) {
+    conn_add_timeout_cb(c, TIMEOUT, request_timeout); /* start timeout timer when receive request line */
+    c->read_callback = get_request_line;
+    get_request_line(c);
 }
 
 // do the clean work
@@ -399,7 +416,7 @@ void request_new(struct conn *c) {
     r->status_code = HTTP_OK;
 
     c->data = (void*)r;
-    c->read_callback = get_request_line;
+    c->read_callback = on_start_request;
     c->close_callback = on_connection_close;
 }
 

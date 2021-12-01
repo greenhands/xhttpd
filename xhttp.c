@@ -10,7 +10,7 @@ static int xhttp_create_bind_socket(const char *addr, int port){
     int listen_fd = socket(PF_INET, SOCK_STREAM, 0);
     if (listen_fd == -1)
         log_error(strerror(errno));
-    log_info("create socket finish");
+    log_info("create listen socket finish");
 
     address.sin_family = AF_INET;
     address.sin_port = htons(port);
@@ -174,10 +174,6 @@ static void xhttp_daemon() {
     log_infof(NULL, "http server is running in background, pid: %d", getpid());
 }
 
-static void timer_cb(void *data) {
-    log_debug("timer callback issued");
-}
-
 int main() {
     xhttp_daemon();
     log_init(LOG_PATH);
@@ -185,7 +181,6 @@ int main() {
     struct xhttp http;
     xhttp_init(&http);
     xhttp_set_handler(&http, "/EchoQueryParams", echo_query_params);
-    event_add_timer(http.ev, 3000, timer_cb, NULL);
     xhttp_start(&http);
 
     return 0;

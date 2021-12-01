@@ -9,14 +9,17 @@
 #include "event.h"
 #include "request.h"
 #include "util.h"
+#include "time_heap.h"
 
-#define BUFF_SIZE 4096
+#define BUFF_SIZE   4096
+#define TIMEOUT     5000 /* 5s */
 
 struct file_sender;
 
 struct conn {
     int fd;
     struct event *ev;
+    struct timer_node *timer;
 
     void (*on_read) (struct conn *c);
     void (*on_write) (struct conn *c);
@@ -47,6 +50,9 @@ void conn_listen(struct conn *c, int events);
 void conn_close(struct conn *c);
 void conn_keepalive(struct conn *c);
 void conn_free(struct conn *c);
+
+void conn_add_timeout_cb(struct conn *c, time_msec_t msec, timer_callback cb);
+void conn_delete_timeout_cb(struct conn *c);
 
 int conn_buff_fulfill(struct conn *c);
 int conn_buff_flush(struct conn *c);

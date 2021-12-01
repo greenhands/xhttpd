@@ -13,6 +13,7 @@ enum http_code {
     HTTP_BAD_REQUEST        = 401,
     HTTP_NOT_FOUND          = 404,
     HTTP_METHOD_NOT_ALLOW   = 405, // should return allowed methods
+    HTTP_REQUEST_TIMEOUT    = 408,
     HTTP_INTERNAL_ERROR     = 500,
 };
 
