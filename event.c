@@ -152,6 +152,7 @@ int event_dispatch(struct event *ev){
     if (timer_size(ev->heap) > 0) {
         time_msec_t mt = timer_min(ev->heap);
         time_msec_t delta = mt - curr_time_msec;
+        delta = delta > 0 ? delta : 0;
         log_debugf(__func__ , "set kevent() timeout: %ld ms", delta);
 
         ts.tv_sec = delta / 1000;
