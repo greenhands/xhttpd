@@ -12,7 +12,7 @@
 - [x] 支持keep-alive
 - [x] demon模式
 - [x] 接收信号
-- [x] 定时器 (利用kevent的超时参数实现)
+- [x] 定时器 (利用kevent的超时参数+最小堆实现)
 - [x] 请求超时机制
 - [ ] FastCGI
 - [ ] 多线程、线程池
@@ -23,3 +23,5 @@
 ### 功能
 - [ ] 支持POST application/x-www-form-urlencoded
 - [ ] 支持一种内容压缩编码格式（gzip、br）
+
+### 性能测试&优化

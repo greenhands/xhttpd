@@ -64,6 +64,8 @@ static void heap_pop(struct timer_heap *heap) {
     timer_delete(heap, heap->nptrs[1]);
 }
 
+/* to make it easy to determine the parent and child of a node, we put the first node
+ * at index 1 of the array, so the real size of array is capacity+1 */
 struct timer_heap* timer_heap_new() {
     struct timer_heap* heap = mem_calloc(1, sizeof(struct timer_heap));
     heap->capacity = HEAP_SIZE;
@@ -97,6 +99,9 @@ void timer_delete(struct timer_heap *heap, struct timer_node *node) {
     int pos = node->idx;
     mem_free(node);
     if (pos < heap->size) {
+        /* we put the last node of heap into this position, to make the heap ordered again
+         * if it is not the top position and is less than its parent we shift it up,
+         * otherwise we shift it down (which is also the case when we pop the top node). */
         heap_set_node(heap, pos, heap->nptrs[heap->size--]);
         int parent = heap_parent(pos);
         if (parent > 0 && heap->nptrs[pos]->expire_at < heap->nptrs[parent]->expire_at)
